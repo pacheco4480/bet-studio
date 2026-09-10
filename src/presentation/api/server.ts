@@ -1,12 +1,21 @@
 import { buildApiApp } from './app.js';
 import { loadServerEnv } from '../../shared/config/server-env.js';
+import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { CatalogService } from '../../application/catalog/catalog-service.js';
+import { openDatabase } from '../../infrastructure/database/connection.js';
+import { DrizzleCatalogRepository } from '../../infrastructure/database/repositories/catalog-repository.js';
 
 const env = loadServerEnv();
-const app = buildApiApp();
+const database = openDatabase(env.BET_STUDIO_DB_PATH);
+migrate(database.db, { migrationsFolder: './drizzle' });
+const app = buildApiApp({
+  catalogService: new CatalogService(new DrizzleCatalogRepository(database.db)),
+});
 
 const closeGracefully = async (signal: NodeJS.Signals): Promise<void> => {
   app.log.info({ signal }, 'Shutting down Bet Studio API');
   await app.close();
+  database.close();
 };
 
 process.on('SIGINT', () => {
