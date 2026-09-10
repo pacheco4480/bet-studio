@@ -587,21 +587,19 @@ quality requirements
 Expected development requirements:
 
 ```text
-Node.js
-package manager
+Node.js 22 LTS
+npm
 Git
 ```
 
-Exact supported versions will be documented after the project foundation is initialized.
+The project currently targets Node.js 22.
 
 ---
 
 ### Installation
 
-Installation commands will be documented after the initial project structure and package scripts are finalized.
-
 ```bash
-# To be finalized after project initialization.
+npm install
 ```
 
 ---
@@ -622,8 +620,15 @@ to:
 
 and configure only the integrations you intend to use.
 
-External providers are optional.
+The Phase 01 foundation only uses:
 
+```text
+NODE_ENV
+API_HOST
+API_PORT
+```
+
+External providers are optional and will be configured in later phases.
 Bet Studio should remain operational without football API credentials.
 
 Never commit:
@@ -647,24 +652,38 @@ Development and migration commands will be documented once the database tooling 
 ### Development Server
 
 ```bash
-# To be finalized after project initialization.
+npm run dev
+```
+
+This starts the Fastify API and Vite frontend together.
+
+The API health endpoint is available at:
+
+```text
+GET /api/health
 ```
 
 ---
 
 ### Quality Gates
 
-The project is expected to maintain:
+The project currently provides:
 
-```text
-format
-lint
-typecheck
-tests
-build
+```bash
+npm run format
+npm run format:check
+npm run lint
+npm run typecheck
+npm run test
+npm run build
+npm run test:e2e
 ```
 
-Exact commands will be documented once the corresponding package scripts exist.
+Playwright browser binaries may need to be installed locally before running E2E tests:
+
+```bash
+npx playwright install
+```
 
 ---
 

@@ -80,19 +80,19 @@ The renderer must be isolated from:
 Use a flow conceptually equivalent to:
 
 Persisted Bulletin / Historical Snapshot
-            ↓
+↓
 Application render-model mapper
-            ↓
+↓
 Validated Render Model
-            ↓
+↓
 Versioned Template
-            ↓
+↓
 Deterministic React/CSS render surface
-            ↓
+↓
 Playwright / Chromium screenshot
-            ↓
+↓
 PNG bytes
-            ↓
+↓
 Export infrastructure + RenderRecord
 
 The renderer consumes already-resolved facts.
@@ -174,65 +174,65 @@ Create a dedicated strongly typed render model.
 Conceptually:
 
 type BulletinRenderModel = {
-  publicCode: string;
+publicCode: string;
 
-  type: "SINGLE" | "MULTI";
-  mode: "PRE_MATCH" | "LIVE";
+type: "SINGLE" | "MULTI";
+mode: "PRE_MATCH" | "LIVE";
 
-  overallStatus: SettlementStatus;
+overallStatus: SettlementStatus;
 
-  totalOdd: string;
-  stake?: string | null;
+totalOdd: string;
+stake?: string | null;
 
-  displayDate?: string | null;
+displayDate?: string | null;
 
-  display: {
-    showCompetition: boolean;
-    showDateTime: boolean;
-    showStake: boolean;
-    showResult: boolean;
-    showStatus: boolean;
-    showBulletinId: boolean;
-  };
+display: {
+showCompetition: boolean;
+showDateTime: boolean;
+showStake: boolean;
+showResult: boolean;
+showStatus: boolean;
+showBulletinId: boolean;
+};
 
-  selections: RenderSelection[];
+selections: RenderSelection[];
 };
 
 type RenderSelection = {
-  position: number;
+position: number;
 
-  homeTeam: {
-    name: string;
-    shortName?: string | null;
-    logo?: RenderAssetRef | null;
-  };
+homeTeam: {
+name: string;
+shortName?: string | null;
+logo?: RenderAssetRef | null;
+};
 
-  awayTeam: {
-    name: string;
-    shortName?: string | null;
-    logo?: RenderAssetRef | null;
-  };
+awayTeam: {
+name: string;
+shortName?: string | null;
+logo?: RenderAssetRef | null;
+};
 
-  competition?: {
-    name: string;
-    shortName?: string | null;
-    logo?: RenderAssetRef | null;
-  } | null;
+competition?: {
+name: string;
+shortName?: string | null;
+logo?: RenderAssetRef | null;
+} | null;
 
-  market: {
-    code: string;
-    label: string;
-  };
+market: {
+code: string;
+label: string;
+};
 
-  odd: string;
+odd: string;
 
-  kickoffAt?: string | null;
+kickoffAt?: string | null;
 
-  status: SettlementStatus;
+status: SettlementStatus;
 
-  resultText?: string | null;
+resultText?: string | null;
 
-  liveMinute?: number | null;
+liveMinute?: number | null;
 };
 
 Adapt naming to current project conventions.
@@ -260,10 +260,8 @@ For current editable bulletin preview, current aggregate data may be mapped norm
 
 For historical re-render:
 
-historical snapshot
-+
-TemplateVersion
-+
+historical snapshot +
+TemplateVersion +
 immutable assets
 
 must be sufficient.
@@ -296,10 +294,10 @@ Use one logical template family for FEED v1.
 Preferred conceptual structure:
 
 Template:
-  code = BETSTUDIO_FEED
+code = BETSTUDIO_FEED
 
 TemplateVersion:
-  version = 1
+version = 1
 
 Inside the versioned configuration, support conditional variants for:
 
@@ -397,18 +395,12 @@ Define determinism accurately.
 
 Bet Studio must guarantee:
 
-same render model
-+
-same TemplateVersion
-+
-same renderer version
-+
-same immutable assets
-+
-same font files
-+
-same Chromium/render environment
-+
+same render model +
+same TemplateVersion +
+same renderer version +
+same immutable assets +
+same font files +
+same Chromium/render environment +
 same locale/timezone/config
 
 → same layout decisions and visual output.
@@ -541,10 +533,10 @@ Renderer input must use stable immutable asset references.
 Conceptually:
 
 type RenderAssetRef = {
-  assetId: string;
-  contentHash: string;
-  mimeType: string;
-  resolvedPath: string;
+assetId: string;
+contentHash: string;
+mimeType: string;
+resolvedPath: string;
 };
 
 The exact implementation may vary.
@@ -1147,14 +1139,14 @@ Keep rendering components small and declarative.
 Possible structure:
 
 rendering/
-  model/
-  templates/
-  components/
-  layout/
-  typography/
-  assets/
-  export/
-  fingerprint/
+model/
+templates/
+components/
+layout/
+typography/
+assets/
+export/
+fingerprint/
 
 Adapt to existing project conventions.
 
@@ -1795,7 +1787,7 @@ POST /api/bulletins/:id/render
 Request may include:
 
 {
-  "format": "FEED"
+"format": "FEED"
 }
 
 and permitted display/template selection if applicable.
@@ -1836,13 +1828,13 @@ Return useful metadata.
 Conceptually:
 
 {
-  renderId,
-  bulletinId,
-  fingerprint,
-  format: "FEED",
-  width: 1080,
-  height: 1350,
-  fileName
+renderId,
+bulletinId,
+fingerprint,
+format: "FEED",
+width: 1080,
+height: 1350,
+fileName
 }
 
 Provide a controlled local file/download route or existing asset-serving mechanism.

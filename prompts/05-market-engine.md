@@ -90,12 +90,11 @@ The core evaluator behavior must be pure and deterministic.
 
 Conceptually:
 
-Market definition
-+
+Market definition +
 Fixture facts
-        ↓
+↓
 Market Engine
-        ↓
+↓
 Evaluation result
 
 No I/O belongs inside evaluator functions.
@@ -142,7 +141,7 @@ Conceptually:
 calculatedStatus = engine result
 
 effectiveStatus =
-  manualStatus ?? calculatedStatus
+manualStatus ?? calculatedStatus
 
 Re-evaluation must update calculated status only.
 
@@ -157,22 +156,22 @@ Define a strongly typed provider-independent evaluation input.
 Conceptually:
 
 type MarketEvaluationInput = {
-  market: {
-    code: string;
-    autoEvaluable: boolean;
-    evaluatorKey: EvaluatorKey | null;
-    parameters: unknown;
-  };
+market: {
+code: string;
+autoEvaluable: boolean;
+evaluatorKey: EvaluatorKey | null;
+parameters: unknown;
+};
 
-  fixture: {
-    status: FixtureStatus;
-    homeScore: number | null;
-    awayScore: number | null;
-    halfTimeHomeScore?: number | null;
-    halfTimeAwayScore?: number | null;
-    homeCorners?: number | null;
-    awayCorners?: number | null;
-  };
+fixture: {
+status: FixtureStatus;
+homeScore: number | null;
+awayScore: number | null;
+halfTimeHomeScore?: number | null;
+halfTimeAwayScore?: number | null;
+homeCorners?: number | null;
+awayCorners?: number | null;
+};
 };
 
 Adapt to existing domain types.
@@ -190,11 +189,11 @@ Return structured results.
 Conceptually:
 
 type MarketEvaluationResult = {
-  status: SettlementStatus;
-  evaluatorKey: EvaluatorKey | null;
-  evaluatorVersion: number | null;
-  reasonCode: MarketEvaluationReasonCode;
-  details?: Record<string, unknown>;
+status: SettlementStatus;
+evaluatorKey: EvaluatorKey | null;
+evaluatorVersion: number | null;
+reasonCode: MarketEvaluationReasonCode;
+details?: Record<string, unknown>;
 };
 
 Keep `details` small and diagnostic.
@@ -216,9 +215,9 @@ Each evaluator exposes its current version.
 Example conceptually:
 
 const totalGoalsEvaluator = {
-  key: "TOTAL_GOALS",
-  version: 1,
-  evaluate(...)
+key: "TOTAL_GOALS",
+version: 1,
+evaluate(...)
 };
 
 The result stores:
@@ -405,7 +404,7 @@ Do not evaluate using partial defaults.
 Parameters:
 
 {
-  result: "HOME" | "DRAW" | "AWAY"
+result: "HOME" | "DRAW" | "AWAY"
 }
 
 Requires:
@@ -441,16 +440,19 @@ RED
 Cover at minimum:
 
 HOME
+
 - 2–1 → GREEN
 - 0–0 → RED
 - 1–3 → RED
 
 DRAW
+
 - 0–0 → GREEN
 - 2–2 → GREEN
 - 1–0 → RED
 
 AWAY
+
 - 0–2 → GREEN
 - 1–1 → RED
 - 3–1 → RED
@@ -468,7 +470,7 @@ Also test:
 Parameters:
 
 {
-  outcome: "1X" | "X2" | "12"
+outcome: "1X" | "X2" | "12"
 }
 
 Requires:
@@ -517,8 +519,8 @@ Also cover:
 Parameters:
 
 {
-  direction: "OVER" | "UNDER";
-  line: number;
+direction: "OVER" | "UNDER";
+line: number;
 }
 
 Requires:
@@ -573,20 +575,24 @@ Do not silently reinterpret the line.
 Examples:
 
 OVER 2.5
+
 - 2–1 → GREEN
 - 1–1 → RED
 - 0–0 → RED
 
 UNDER 2.5
+
 - 1–0 → GREEN
 - 1–1 → GREEN
 - 2–1 → RED
 
 OVER 0.5
+
 - 1–0 → GREEN
 - 0–0 → RED
 
 UNDER 0.5
+
 - 0–0 → GREEN
 - 1–0 → RED
 
@@ -604,7 +610,7 @@ Also test:
 Parameters:
 
 {
-  selection: "YES" | "NO"
+selection: "YES" | "NO"
 }
 
 Requires:
@@ -615,7 +621,7 @@ awayScore
 Determine:
 
 bothScored =
-  homeScore > 0 && awayScore > 0
+homeScore > 0 && awayScore > 0
 
 YES:
 bothScored → GREEN
@@ -652,8 +658,8 @@ Also cover missing score and invalid selection parameter.
 Parameters:
 
 {
-  direction: "OVER" | "UNDER";
-  line: number;
+direction: "OVER" | "UNDER";
+line: number;
 }
 
 Requires:
@@ -664,7 +670,7 @@ awayCorners
 Calculate:
 
 totalCorners =
-  homeCorners + awayCorners
+homeCorners + awayCorners
 
 For supported half-lines:
 
@@ -751,13 +757,13 @@ Do not duplicate MATCH_RESULT / TOTAL_GOALS / BTTS logic inside COMPOSITE.
 Parameters:
 
 {
-  operator: "AND" | "OR";
-  conditions: [
-    {
-      evaluatorKey: ...;
-      parameters: ...;
-    }
-  ];
+operator: "AND" | "OR";
+conditions: [
+{
+evaluatorKey: ...;
+parameters: ...;
+}
+];
 }
 
 Follow the configuration rules established in Phase 03.
@@ -1017,23 +1023,23 @@ Evaluation details may contain useful structured diagnostic facts.
 Examples:
 
 {
-  actualResult: "HOME"
+actualResult: "HOME"
 }
 
 {
-  totalGoals: 3,
-  line: 2.5,
-  direction: "OVER"
+totalGoals: 3,
+line: 2.5,
+direction: "OVER"
 }
 
 {
-  totalCorners: 11
+totalCorners: 11
 }
 
 For composite:
 
 {
-  childStatuses: ["GREEN", "RED"]
+childStatuses: ["GREEN", "RED"]
 }
 
 Keep details deterministic and serializable.
@@ -1049,7 +1055,7 @@ Validate fixture facts.
 Scores and corners, when present, must be:
 
 - integers;
-- >= 0.
+- > = 0.
 
 Reject or safely classify malformed inputs.
 
@@ -1160,8 +1166,8 @@ Do not delete historical override records merely to simplify UI state.
 Implement a pure/easily tested function such as conceptually:
 
 resolveEffectiveStatus(
-  calculatedStatus,
-  currentManualOverride
+calculatedStatus,
+currentManualOverride
 )
 
 Rules:
@@ -1270,10 +1276,8 @@ Do not mutate previous historical snapshots when re-evaluating current operation
 
 Evaluating the same:
 
-market configuration
-+
-fixture facts
-+
+market configuration +
+fixture facts +
 evaluator version
 
 must produce the same calculated result.
@@ -1555,8 +1559,8 @@ Support explicit manual settlement actions.
 Example body conceptually:
 
 {
-  "status": "GREEN",
-  "reason": "Manual review"
+"status": "GREEN",
+"reason": "Manual review"
 }
 
 Validate allowed values.
@@ -1642,12 +1646,12 @@ Prefer table-driven tests for evaluator truth tables.
 Example structure conceptually:
 
 [
-  {
-    score: [2, 1],
-    parameters: {...},
-    expected: "GREEN"
-  },
-  ...
+{
+score: [2, 1],
+parameters: {...},
+expected: "GREEN"
+},
+...
 ]
 
 This makes market rules easy to audit.

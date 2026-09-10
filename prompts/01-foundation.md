@@ -103,11 +103,11 @@ Keep frontend and backend concerns clearly separated without creating unnecessar
 A reasonable source organization is conceptually:
 
 src/
-  domain/
-  application/
-  infrastructure/
-  presentation/
-  shared/
+domain/
+application/
+infrastructure/
+presentation/
+shared/
 
 The exact structure may adapt to the existing repository.
 
@@ -122,11 +122,11 @@ Create architectural locations only when they have an immediate purpose or when 
 Respect the documented dependency direction:
 
 Presentation
-    ↓
+↓
 Application
-    ↓
+↓
 Domain
-    ↑
+↑
 Infrastructure
 
 The Domain layer must remain framework-independent.
@@ -196,7 +196,7 @@ GET /api/health
 A successful response may be structurally similar to:
 
 {
-  "status": "ok"
+"status": "ok"
 }
 
 Do not expose environment values, machine details, secrets or unnecessary diagnostics through the health endpoint.

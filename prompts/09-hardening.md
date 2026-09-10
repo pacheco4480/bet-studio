@@ -16,7 +16,7 @@ Before making changes:
    - docs/market-engine.md
    - docs/api-integration.md
    - docs/rendering-engine.md
-   only when auditing the corresponding implementation.
+     only when auditing the corresponding implementation.
 5. Inspect the complete implementation from Phases 01–08.
 6. Inspect package scripts, TypeScript configuration, ESLint, Vitest, Playwright, Fastify error handling, Zod schemas, database migrations, CI and `.gitignore`.
 
@@ -238,6 +238,7 @@ Maintain or add only a few critical workflows.
 Recommended canonical flows:
 
 A. Bulletin creation
+
 - create MULTI;
 - add selections;
 - save;
@@ -245,12 +246,14 @@ A. Bulletin creation
 - verify persisted values.
 
 B. Result management
+
 - evaluate;
 - manual override;
 - reset;
 - verify effective status.
 
 C. Render
+
 - export FEED;
 - verify successful RenderRecord/download metadata.
 
@@ -346,10 +349,10 @@ Return a stable safe JSON error shape.
 Conceptually:
 
 {
-  "error": {
-    "code": "BULLETIN_NOT_FOUND",
-    "message": "Bulletin not found"
-  }
+"error": {
+"code": "BULLETIN_NOT_FOUND",
+"message": "Bulletin not found"
+}
 }
 
 Optional safe field:
@@ -1091,13 +1094,13 @@ For field validation, structured safe details are useful.
 Example conceptually:
 
 {
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Invalid request",
-    "details": {
-      "selections.1.odd": "Invalid odd"
-    }
-  }
+"error": {
+"code": "VALIDATION_ERROR",
+"message": "Invalid request",
+"details": {
+"selections.1.odd": "Invalid odd"
+}
+}
 }
 
 Do not expose Zod internals unnecessarily.
@@ -1159,8 +1162,7 @@ Existing local data survives failure.
 
 If current implementation updates:
 
-BulletinSelection.manualStatus
-+
+BulletinSelection.manualStatus +
 SettlementOverride audit
 
 ensure the two writes are transactionally coherent.

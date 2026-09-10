@@ -377,18 +377,23 @@ Text fitting requirements:
 Required states:
 
 ### PENDING
+
 Neutral visual state.
 
 ### GREEN
+
 Clear successful state.
 
 ### RED
+
 Clear unsuccessful state.
 
 ### VOID
+
 Neutral/cancelled state distinct from RED.
 
 ### MANUAL
+
 Indicates manual settlement is required.
 
 GREEN, RED and VOID indicators must use reserved layout areas.

@@ -120,11 +120,11 @@ CRUD behavior must be implemented through application use cases/services rather 
 Conceptually:
 
 Presentation
-    ↓
+↓
 Application
-    ↓
+↓
 Repositories / Domain
-    ↓
+↓
 Infrastructure
 
 Create focused use cases such as:
@@ -167,26 +167,26 @@ Expose clear Fastify routes under:
 
 A reasonable REST-style structure is:
 
-GET    /api/competitions
-POST   /api/competitions
-GET    /api/competitions/:id
-PATCH  /api/competitions/:id
+GET /api/competitions
+POST /api/competitions
+GET /api/competitions/:id
+PATCH /api/competitions/:id
 
-GET    /api/teams
-POST   /api/teams
-GET    /api/teams/:id
-PATCH  /api/teams/:id
+GET /api/teams
+POST /api/teams
+GET /api/teams/:id
+PATCH /api/teams/:id
 
-POST   /api/teams/:id/aliases
+POST /api/teams/:id/aliases
 DELETE /api/teams/:id/aliases/:aliasId
 
-POST   /api/teams/:id/competitions/:competitionId
+POST /api/teams/:id/competitions/:competitionId
 DELETE /api/teams/:id/competitions/:competitionId
 
-GET    /api/markets
-POST   /api/markets
-GET    /api/markets/:id
-PATCH  /api/markets/:id
+GET /api/markets
+POST /api/markets
+GET /api/markets/:id
+PATCH /api/markets/:id
 
 The exact route design may adapt to existing project conventions.
 
@@ -229,8 +229,8 @@ For lists, support simple metadata only when useful.
 Example conceptually:
 
 {
-  "items": [...],
-  "total": 23
+"items": [...],
+"total": 23
 }
 
 Do not add cursor pagination unless the current scale requires it.
@@ -246,8 +246,8 @@ Map application errors appropriately.
 Examples:
 
 ValidationError → 400
-NotFoundError   → 404
-ConflictError   → 409
+NotFoundError → 404
+ConflictError → 409
 
 Unexpected infrastructure errors → controlled 500
 
@@ -620,40 +620,40 @@ Expected parameter structures include:
 MATCH_RESULT
 
 {
-  result: "HOME" | "DRAW" | "AWAY"
+result: "HOME" | "DRAW" | "AWAY"
 }
 
 TOTAL_GOALS
 
 {
-  direction: "OVER" | "UNDER",
-  line: number
+direction: "OVER" | "UNDER",
+line: number
 }
 
 DOUBLE_CHANCE
 
 {
-  outcome: "1X" | "X2" | "12"
+outcome: "1X" | "X2" | "12"
 }
 
 BTTS
 
 {
-  selection: "YES" | "NO"
+selection: "YES" | "NO"
 }
 
 TOTAL_CORNERS
 
 {
-  direction: "OVER" | "UNDER",
-  line: number
+direction: "OVER" | "UNDER",
+line: number
 }
 
 COMPOSITE
 
 {
-  operator: "AND" | "OR",
-  conditions: [...]
+operator: "AND" | "OR",
+conditions: [...]
 }
 
 Do not implement evaluator execution.
@@ -926,13 +926,16 @@ Do not implement full-text search infrastructure.
 Useful filters include:
 
 Competitions:
+
 - active status
 
 Teams:
+
 - active status
 - competition where practical
 
 Markets:
+
 - active status
 - auto/manual evaluation
 - category if useful
@@ -1020,6 +1023,7 @@ Add route/application tests for high-value CRUD behavior.
 At minimum cover:
 
 Competitions:
+
 - list;
 - create;
 - get;
@@ -1029,6 +1033,7 @@ Competitions:
 - not found.
 
 Teams:
+
 - create;
 - update;
 - alias add/remove;
@@ -1038,6 +1043,7 @@ Teams:
 - deactivate.
 
 Markets:
+
 - create manual market;
 - create valid auto-evaluable market;
 - reject invalid evaluator parameters;
@@ -1089,27 +1095,33 @@ Use E2E only for one or two representative management workflows if Playwright is
 Add table-driven validation tests covering at least:
 
 MATCH_RESULT
+
 - valid HOME
 - invalid result
 
 TOTAL_GOALS
+
 - valid OVER 2.5
 - valid UNDER 1.5
 - invalid line
 
 DOUBLE_CHANCE
+
 - valid 1X
 - invalid value
 
 BTTS
+
 - valid YES
 - valid NO
 
 TOTAL_CORNERS
+
 - valid OVER 9.5
 - invalid line
 
 COMPOSITE
+
 - valid AND combination
 - valid OR combination
 - too few conditions
@@ -1358,12 +1370,14 @@ Perform a basic manual verification of the management workflows if the environme
 Check:
 
 Competitions
+
 - create;
 - edit;
 - deactivate;
 - list/search.
 
 Teams
+
 - create;
 - edit;
 - alias management;
@@ -1371,6 +1385,7 @@ Teams
 - deactivate.
 
 Markets
+
 - manual market creation;
 - auto-evaluable market creation;
 - evaluator-specific form behavior;

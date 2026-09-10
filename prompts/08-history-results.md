@@ -92,9 +92,9 @@ Use existing Application use cases/services.
 Conceptually:
 
 History UI
-   ↓
+↓
 Application
-   ↓
+↓
 Domain + repositories + renderer/provider ports
 
 React must not calculate settlement rules.
@@ -359,13 +359,13 @@ It should:
 Example result conceptually:
 
 {
-  evaluated: 5,
-  green: 3,
-  red: 1,
-  pending: 1,
-  manual: 0,
-  void: 0,
-  bulletinStatus: "RED"
+evaluated: 5,
+green: 3,
+red: 1,
+pending: 1,
+manual: 0,
+void: 0,
+bulletinStatus: "RED"
 }
 
 Use existing status logic.
@@ -518,12 +518,9 @@ Do not append duplicate result snapshots unnecessarily.
 
 If the same:
 
-fixture facts
-+
-market config
-+
-evaluator version
-+
+fixture facts +
+market config +
+evaluator version +
 calculated result
 
 is evaluated repeatedly and nothing changed, follow existing idempotency policy.
@@ -803,19 +800,19 @@ Do not expose raw persistence records.
 Conceptually:
 
 type BulletinHistoryListItem = {
-  id: string;
-  publicCode: string;
-  type: BulletinType;
-  mode: BulletinMode;
-  selectionCount: number;
-  totalOdd: string;
-  effectiveStatus: SettlementStatus;
-  createdAt: string;
-  updatedAt: string;
-  latestRender?: {
-    id: string;
-    createdAt: string;
-  } | null;
+id: string;
+publicCode: string;
+type: BulletinType;
+mode: BulletinMode;
+selectionCount: number;
+totalOdd: string;
+effectiveStatus: SettlementStatus;
+createdAt: string;
+updatedAt: string;
+latestRender?: {
+id: string;
+createdAt: string;
+} | null;
 };
 
 Adapt to existing conventions.
@@ -948,7 +945,7 @@ Do not accept raw JSON.
 Scores/corners when present must be:
 
 - integer;
-- >= 0.
+- > = 0.
 
 Do not allow:
 
@@ -1171,6 +1168,7 @@ History list
 → Bulletin detail
 
 Bulletin detail:
+
 - summary header;
 - selection result cards;
 - result actions;
@@ -1676,8 +1674,7 @@ Do not redesign the data model.
 
 If current implementation already uses:
 
-BulletinSelection.manualStatus
-+
+BulletinSelection.manualStatus +
 append-only SettlementOverride history
 
 keep it.
@@ -1686,8 +1683,7 @@ Do not migrate to full event sourcing.
 
 This gives:
 
-fast current state
-+
+fast current state +
 simple audit history
 
 which is appropriate for v1.

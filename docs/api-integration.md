@@ -2038,3 +2038,4 @@ UI directly coupled to remote API
 Bet Studio owns its domain data.
 
 Providers only supply external observations.
+```

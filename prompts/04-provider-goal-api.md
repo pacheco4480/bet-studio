@@ -114,13 +114,13 @@ to leak into:
 The boundary should conceptually be:
 
 GOAL API JSON
-      ↓
+↓
 GoalApiProvider
-      ↓
+↓
 Normalized External Models
-      ↓
+↓
 Synchronization Application Service
-      ↓
+↓
 Local Domain / Database
 
 ---
@@ -154,13 +154,13 @@ Create a small provider contract representing only capabilities required by curr
 A conceptual shape may be:
 
 interface FootballDataProvider {
-  readonly code: string;
-  readonly capabilities: ProviderCapabilities;
+readonly code: string;
+readonly capabilities: ProviderCapabilities;
 
-  listCompetitions(...): Promise<ExternalCompetition[]>;
-  listTeams(...): Promise<ExternalTeam[]>;
-  listFixtures(...): Promise<ExternalFixture[]>;
-  getFixture(...): Promise<ExternalFixture | null>;
+listCompetitions(...): Promise<ExternalCompetition[]>;
+listTeams(...): Promise<ExternalTeam[]>;
+listFixtures(...): Promise<ExternalFixture[]>;
+getFixture(...): Promise<ExternalFixture | null>;
 }
 
 Adapt this to actual requirements.
@@ -235,12 +235,12 @@ Normalize only relevant fields.
 Conceptually:
 
 type ExternalCompetition = {
-  providerCode: string;
-  externalId: string;
-  name: string;
-  shortName?: string | null;
-  country?: string | null;
-  logoUrl?: string | null;
+providerCode: string;
+externalId: string;
+name: string;
+shortName?: string | null;
+country?: string | null;
+logoUrl?: string | null;
 };
 
 Adapt according to verified provider data.
@@ -254,12 +254,12 @@ Do not let provider response structures escape the adapter.
 Conceptually normalize:
 
 type ExternalTeam = {
-  providerCode: string;
-  externalId: string;
-  name: string;
-  shortName?: string | null;
-  country?: string | null;
-  logoUrl?: string | null;
+providerCode: string;
+externalId: string;
+name: string;
+shortName?: string | null;
+country?: string | null;
+logoUrl?: string | null;
 };
 
 Do not automatically create invented short names.
@@ -275,26 +275,26 @@ Normalize the fields currently needed by Bet Studio.
 Conceptually:
 
 type ExternalFixture = {
-  providerCode: string;
-  externalId: string;
+providerCode: string;
+externalId: string;
 
-  competitionExternalId: string | null;
+competitionExternalId: string | null;
 
-  homeTeamExternalId: string;
-  awayTeamExternalId: string;
+homeTeamExternalId: string;
+awayTeamExternalId: string;
 
-  kickoffAt: Date | string;
+kickoffAt: Date | string;
 
-  status: NormalizedFixtureStatus;
+status: NormalizedFixtureStatus;
 
-  homeScore: number | null;
-  awayScore: number | null;
+homeScore: number | null;
+awayScore: number | null;
 
-  halfTimeHomeScore?: number | null;
-  halfTimeAwayScore?: number | null;
+halfTimeHomeScore?: number | null;
+halfTimeAwayScore?: number | null;
 
-  homeCorners?: number | null;
-  awayCorners?: number | null;
+homeCorners?: number | null;
+awayCorners?: number | null;
 };
 
 The exact representation should follow existing project date/value conventions.
@@ -601,13 +601,13 @@ Provider adapters must not write directly to SQLite.
 Use:
 
 Provider Adapter
-      ↓
+↓
 Normalized Models
-      ↓
+↓
 Sync Application Service
-      ↓
+↓
 Repositories / Transaction
-      ↓
+↓
 Database
 
 The synchronization service decides how external records map into local entities.
@@ -735,12 +735,9 @@ Prefer existing ProviderReference first.
 
 If provider fixture mapping does not exist, safe deterministic matching may use:
 
-competition
-+
-home team
-+
-away team
-+
+competition +
+home team +
+away team +
 kickoff tolerance
 
 only where all required mappings are unambiguous.
@@ -859,12 +856,9 @@ Use the ProviderReference infrastructure created in Phase 02.
 
 Mappings must associate:
 
-provider
-+
-entity type
-+
-local entity
-+
+provider +
+entity type +
+local entity +
 external ID
 
 Do not add external GOAL API IDs directly to Competition, Team or Fixture columns unless the existing model explicitly requires a cached convenience field, which is not expected.
@@ -914,12 +908,12 @@ Return a useful structured result from sync operations.
 Conceptually:
 
 {
-  status: "SUCCESS",
-  processed: 20,
-  created: 4,
-  updated: 16,
-  unresolved: 0,
-  failed: 0
+status: "SUCCESS",
+processed: 20,
+created: 4,
+updated: 16,
+unresolved: 0,
+failed: 0
 }
 
 Adapt to existing conventions.
@@ -961,13 +955,13 @@ Result synchronization and market settlement remain separate responsibilities.
 Conceptually:
 
 GOAL API
-   ↓
+↓
 FixtureResultDetails updated
 
 NOT:
 
 GOAL API
-   ↓
+↓
 direct GREEN / RED mutation
 
 Phase 05 will evaluate selections from normalized local fixture data.
@@ -1084,13 +1078,13 @@ If needed, define simple configuration/defaults.
 Reasonable conceptual defaults may be:
 
 competitions / teams:
-  approximately 24h
+approximately 24h
 
 future fixtures:
-  approximately 3–6h
+approximately 3–6h
 
 finished fixtures:
-  persist locally
+persist locally
 
 But do not hardcode these values throughout the codebase.
 
@@ -1168,8 +1162,8 @@ Expose application synchronization operations through Fastify.
 
 Possible structure:
 
-GET  /api/providers
-GET  /api/providers/goal/status
+GET /api/providers
+GET /api/providers/goal/status
 
 POST /api/sync/competitions
 POST /api/sync/competitions/:competitionId/teams
@@ -1190,7 +1184,7 @@ Never implement endpoints such as:
 
 POST /api/fetch-url
 {
-  "url": "..."
+"url": "..."
 }
 
 Provider base URLs must come from trusted server configuration.

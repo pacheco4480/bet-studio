@@ -167,9 +167,9 @@ Do not use Drizzle table-row types as domain entities throughout the application
 Maintain a useful separation:
 
 Domain Model
-    ↕
+↕
 Mapper
-    ↕
+↕
 Persistence Record
 
 Do not create elaborate mapping frameworks.
@@ -746,10 +746,10 @@ Keep it separate from TemplateVersion.
 Examples conceptually:
 
 Template
-  code = BETSTUDIO_FEED
+code = BETSTUDIO_FEED
 
 TemplateVersion
-  version = 1
+version = 1
 
 Do not implement rendering behavior in Phase 02.
 

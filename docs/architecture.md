@@ -28,45 +28,59 @@ Core business logic must not depend directly on:
 ## 2. Initial Technology Stack
 
 ### Language
+
 TypeScript
 
 ### Frontend
+
 React
 
 ### Frontend tooling
+
 Vite
 
 ### Styling
+
 Tailwind CSS
 
 ### Backend
+
 Node.js
 
 ### HTTP server
+
 Fastify
 
 ### Database
+
 SQLite
 
 ### ORM
+
 Drizzle ORM
 
 ### Validation
+
 Zod
 
 ### Unit/integration tests
+
 Vitest
 
 ### End-to-end tests
+
 Playwright
 
 ### Linting
+
 ESLint
 
 ### Formatting
+
 Prettier
 
 ### CI
+
 GitHub Actions
 
 Rendering implementation is defined separately in `rendering-engine.md`.
@@ -632,3 +646,4 @@ Performance
 Future extensibility
 
 Do not optimize for hypothetical future requirements at the cost of current simplicity.
+```

@@ -833,3 +833,4 @@ speculative infrastructure
 hidden behavior
 
 When uncertain, preserve correctness, historical integrity and simplicity.
+```

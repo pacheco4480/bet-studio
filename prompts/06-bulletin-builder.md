@@ -101,13 +101,13 @@ It is not responsible for:
 Conceptually:
 
 User input
-   ↓
+↓
 Builder UI
-   ↓
+↓
 Application validation/use case
-   ↓
+↓
 Bulletin aggregate
-   ↓
+↓
 Persistence
 
 Settlement status may be read from the Market Engine/application state, but the builder does not implement evaluator rules itself.
@@ -496,8 +496,7 @@ Use decimal-safe arithmetic.
 
 Do not use naïve:
 
-Number
-*
+Number *
 Number
 
 as the canonical calculation if Phase 02 established decimal-safe values.
@@ -795,10 +794,8 @@ Do not automatically deduplicate solely by fixture ID.
 
 If there is no documented reason to allow an exact duplicate:
 
-same fixture
-+
-same market
-+
+same fixture +
+same market +
 same market configuration
 
 consider preventing or warning about it.
@@ -859,12 +856,12 @@ Expose focused bulletin endpoints.
 
 A reasonable shape:
 
-GET    /api/bulletins
-POST   /api/bulletins
-GET    /api/bulletins/:id
-PATCH  /api/bulletins/:id
+GET /api/bulletins
+POST /api/bulletins
+GET /api/bulletins/:id
+PATCH /api/bulletins/:id
 
-POST   /api/bulletins/:id/duplicate
+POST /api/bulletins/:id/duplicate
 
 Adapt to existing API conventions.
 
@@ -918,15 +915,15 @@ Recommended conceptual structure:
 Header / Bulletin settings
 
 Selections
-  Selection 1
-  Selection 2
-  ...
+Selection 1
+Selection 2
+...
 
 Summary / Preview
 
 Actions:
-  Save
-  Duplicate where applicable
+Save
+Duplicate where applicable
 
 For desktop, a two-column editor/preview layout may be useful.
 
@@ -965,9 +962,11 @@ Provide an obvious Add Selection action.
 Respect type:
 
 SINGLE:
+
 - do not allow adding a second selection
 
 MULTI:
+
 - allow until 10
 
 At maximum:
@@ -1276,9 +1275,9 @@ Keep preview input close to the future render-model contract.
 Prefer mapping:
 
 Bulletin aggregate / API DTO
-       ↓
+↓
 Preview model
-       ↓
+↓
 React preview component
 
 Do not have the preview query repositories/providers itself.
@@ -1456,17 +1455,17 @@ The write DTO should not allow clients to set server-owned fields such as:
 A conceptual create DTO might include:
 
 {
-  type,
-  mode,
-  stake?,
-  displayOptions,
-  selections: [
-    {
-      fixtureId,
-      marketId,
-      odd
-    }
-  ]
+type,
+mode,
+stake?,
+displayOptions,
+selections: [
+{
+fixtureId,
+marketId,
+odd
+}
+]
 }
 
 Adapt to actual domain requirements.

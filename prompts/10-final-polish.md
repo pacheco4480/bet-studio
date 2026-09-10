@@ -18,17 +18,18 @@ Before making changes:
 8. Read docs/rendering-engine.md only where needed to verify rendering/setup claims.
 9. Inspect the complete implementation from Phases 01–09.
 10. Inspect:
-   - package scripts;
-   - GitHub Actions;
-   - `.gitignore`;
-   - `.env.example`;
-   - application navigation;
-   - loading/error/empty states;
-   - Builder;
-   - History;
-   - provider sync UI;
-   - render/export UX;
-   - tests.
+
+- package scripts;
+- GitHub Actions;
+- `.gitignore`;
+- `.env.example`;
+- application navigation;
+- loading/error/empty states;
+- Builder;
+- History;
+- provider sync UI;
+- render/export UX;
+- tests.
 
 The repository and implementation are the source of truth.
 
@@ -859,11 +860,11 @@ Keep architecture explanation concise.
 Example concept:
 
 Presentation
-   ↓
+↓
 Application
-   ↓
+↓
 Domain
-   ↑
+↑
 Infrastructure
 
 Explain that:
