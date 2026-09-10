@@ -352,6 +352,7 @@ type Market = {
   autoEvaluable: boolean;
 
   evaluatorKey: string | null;
+  parameters: unknown | null;
 
   createdAt: Date;
   updatedAt: Date;
@@ -373,6 +374,7 @@ code must be unique.
 code is a stable domain identifier.
 Display name may change without changing the code.
 evaluatorKey links the market to domain evaluation logic.
+parameters stores validated evaluator configuration where applicable.
 Market rules themselves are not stored as executable user-provided code.
 Unsupported markets may have autoEvaluable = false.
 14. Bulletin
@@ -426,7 +428,7 @@ publicCode is human-readable and unique.
 
 Example:
 
-BET-0001
+BET #0001
 
 The exact format may be configurable later.
 

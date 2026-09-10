@@ -12,6 +12,12 @@
     "rootDir": "src",
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src/presentation/api", "src/shared", "src/**/*.test.ts"],
-  "exclude": ["src/presentation/web"]
+  "include": [
+    "src/domain",
+    "src/application",
+    "src/infrastructure",
+    "src/presentation/api",
+    "src/shared"
+  ],
+  "exclude": ["src/presentation/web", "src/**/*.test.ts", "src/**/*.test.tsx"]
 }

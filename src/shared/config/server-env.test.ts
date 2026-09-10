@@ -15,6 +15,7 @@ describe('loadServerEnv', () => {
       NODE_ENV: 'test',
       API_HOST: '127.0.0.1',
       API_PORT: 3010,
+      BET_STUDIO_DB_PATH: './data/bet-studio.db',
     });
   });
 

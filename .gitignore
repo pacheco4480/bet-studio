@@ -4,6 +4,7 @@ dist-api/
 coverage/
 playwright-report/
 test-results/
+data/
 
 .env
 .env.*

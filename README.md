@@ -626,6 +626,7 @@ The Phase 01 foundation only uses:
 NODE_ENV
 API_HOST
 API_PORT
+BET_STUDIO_DB_PATH
 ```
 
 External providers are optional and will be configured in later phases.
@@ -645,7 +646,23 @@ Bet Studio uses SQLite for local persistence.
 
 Database schema changes are managed through migrations.
 
-Development and migration commands will be documented once the database tooling has been initialized.
+The default local database path is:
+
+```text
+./data/bet-studio.db
+```
+
+Generate migrations after schema changes:
+
+```bash
+npm run db:generate
+```
+
+Apply migrations to the configured local database:
+
+```bash
+npm run db:migrate
+```
 
 ---
 
