@@ -47,7 +47,25 @@ type SyncResult = {
   message: string | null;
 };
 
-type Tab = 'competitions' | 'teams' | 'markets' | 'fixtures';
+type EvaluatedSelection = {
+  selectionId: string;
+  calculatedStatus: string;
+  manualStatus: string | null;
+  effectiveStatus: string;
+  result: {
+    evaluatorKey: string | null;
+    evaluatorVersion: number | null;
+    reasonCode: string;
+  };
+};
+
+type BulletinEvaluationResult = {
+  bulletinId: string;
+  status: string;
+  selections: EvaluatedSelection[];
+};
+
+type Tab = 'competitions' | 'teams' | 'markets' | 'fixtures' | 'settlement';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers = new Headers(options?.headers);
@@ -82,28 +100,35 @@ export function App() {
             <h1 className="mt-3 text-3xl font-bold">Catalog Management</h1>
           </div>
           <nav className="flex gap-2" aria-label="Catalog sections">
-            {(['competitions', 'teams', 'markets', 'fixtures'] as const).map(
-              (item) => (
-                <button
-                  key={item}
-                  className={`rounded border px-4 py-2 text-sm font-medium capitalize focus:outline focus:outline-2 focus:outline-studio-lime ${
-                    tab === item
-                      ? 'border-studio-lime bg-studio-lime text-black'
-                      : 'border-white/10 bg-studio-panel text-slate-200'
-                  }`}
-                  onClick={() => setTab(item)}
-                  type="button"
-                >
-                  {item}
-                </button>
-              ),
-            )}
+            {(
+              [
+                'competitions',
+                'teams',
+                'markets',
+                'fixtures',
+                'settlement',
+              ] as const
+            ).map((item) => (
+              <button
+                key={item}
+                className={`rounded border px-4 py-2 text-sm font-medium capitalize focus:outline focus:outline-2 focus:outline-studio-lime ${
+                  tab === item
+                    ? 'border-studio-lime bg-studio-lime text-black'
+                    : 'border-white/10 bg-studio-panel text-slate-200'
+                }`}
+                onClick={() => setTab(item)}
+                type="button"
+              >
+                {item}
+              </button>
+            ))}
           </nav>
         </header>
         {tab === 'competitions' && <CompetitionsPanel />}
         {tab === 'teams' && <TeamsPanel />}
         {tab === 'markets' && <MarketsPanel />}
         {tab === 'fixtures' && <FixturesPanel />}
+        {tab === 'settlement' && <SettlementPanel />}
       </div>
     </main>
   );
@@ -745,6 +770,163 @@ function FixturesPanel() {
         <TextInput label="Date" value={date} onChange={setDate} required />
       </SyncPanel>
     </CatalogSection>
+  );
+}
+
+function SettlementPanel() {
+  const [selectionId, setSelectionId] = useState('');
+  const [bulletinId, setBulletinId] = useState('');
+  const [overrideStatus, setOverrideStatus] = useState('GREEN');
+  const [overrideReason, setOverrideReason] = useState('');
+  const [selectionResult, setSelectionResult] =
+    useState<EvaluatedSelection | null>(null);
+  const [bulletinResult, setBulletinResult] =
+    useState<BulletinEvaluationResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run(action: () => Promise<void>) {
+    setError(null);
+    await action().catch((err: Error) => setError(err.message));
+  }
+
+  return (
+    <CatalogSection title="Settlement" error={error}>
+      <section className="grid gap-4 rounded border border-white/10 bg-studio-panel p-4 md:grid-cols-3">
+        <TextInput
+          label="Selection ID"
+          value={selectionId}
+          onChange={setSelectionId}
+        />
+        <label className="text-sm text-slate-300">
+          Manual status
+          <select
+            className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-white"
+            value={overrideStatus}
+            onChange={(event) => setOverrideStatus(event.target.value)}
+          >
+            {['GREEN', 'RED', 'VOID', 'PENDING', 'MANUAL'].map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+        </label>
+        <TextInput
+          label="Reason"
+          value={overrideReason}
+          onChange={setOverrideReason}
+        />
+        <div className="flex flex-wrap gap-2 md:col-span-3">
+          <button
+            type="button"
+            className="rounded bg-studio-lime px-4 py-2 font-semibold text-black"
+            onClick={() =>
+              void run(async () => {
+                setSelectionResult(
+                  await request<EvaluatedSelection>(
+                    `/api/selections/${selectionId}/evaluate`,
+                    { method: 'POST' },
+                  ),
+                );
+              })
+            }
+          >
+            Re-evaluate selection
+          </button>
+          <button
+            type="button"
+            className="rounded border border-white/10 px-4 py-2 font-semibold text-slate-200"
+            onClick={() =>
+              void run(async () => {
+                setSelectionResult(
+                  await request<EvaluatedSelection>(
+                    `/api/selections/${selectionId}/settlement-override`,
+                    {
+                      method: 'PATCH',
+                      body: JSON.stringify({
+                        status: overrideStatus,
+                        reason: overrideReason || undefined,
+                      }),
+                    },
+                  ),
+                );
+              })
+            }
+          >
+            Set manual override
+          </button>
+          <button
+            type="button"
+            className="rounded border border-white/10 px-4 py-2 font-semibold text-slate-200"
+            onClick={() =>
+              void run(async () => {
+                setSelectionResult(
+                  await request<EvaluatedSelection>(
+                    `/api/selections/${selectionId}/settlement-override`,
+                    { method: 'DELETE' },
+                  ),
+                );
+              })
+            }
+          >
+            Reset to automatic
+          </button>
+        </div>
+      </section>
+      <section className="grid gap-4 rounded border border-white/10 bg-studio-panel p-4 md:grid-cols-[1fr_auto]">
+        <TextInput
+          label="Bulletin ID"
+          value={bulletinId}
+          onChange={setBulletinId}
+        />
+        <button
+          type="button"
+          className="self-end rounded bg-studio-lime px-4 py-2 font-semibold text-black"
+          onClick={() =>
+            void run(async () => {
+              setBulletinResult(
+                await request<BulletinEvaluationResult>(
+                  `/api/bulletins/${bulletinId}/evaluate`,
+                  { method: 'POST' },
+                ),
+              );
+            })
+          }
+        >
+          Re-evaluate bulletin
+        </button>
+      </section>
+      {selectionResult && <SettlementResultCard result={selectionResult} />}
+      {bulletinResult && (
+        <section className="grid gap-3 rounded border border-white/10 bg-black/20 p-4">
+          <h3 className="font-semibold">
+            Bulletin status: {bulletinResult.status}
+          </h3>
+          {bulletinResult.selections.map((selection) => (
+            <SettlementResultCard
+              key={selection.selectionId}
+              result={selection}
+            />
+          ))}
+        </section>
+      )}
+    </CatalogSection>
+  );
+}
+
+function SettlementResultCard(props: { result: EvaluatedSelection }) {
+  return (
+    <article className="grid gap-2 rounded border border-white/10 bg-black/20 p-4 text-sm text-slate-300">
+      <h3 className="font-semibold text-white">{props.result.selectionId}</h3>
+      <p>Calculated: {props.result.calculatedStatus}</p>
+      <p>Manual override: {props.result.manualStatus ?? 'None'}</p>
+      <p>Effective: {props.result.effectiveStatus}</p>
+      <p>
+        Engine: {props.result.result.evaluatorKey ?? 'N/A'}@
+        {props.result.result.evaluatorVersion ?? 'N/A'} |{' '}
+        {props.result.result.reasonCode}
+      </p>
+    </article>
   );
 }
 

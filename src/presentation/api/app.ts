@@ -3,6 +3,7 @@ import {
   CatalogService,
   listQuerySchema,
 } from '../../application/catalog/catalog-service.js';
+import type { SettlementService } from '../../application/settlement/settlement-service.js';
 import type { SynchronizationService } from '../../application/synchronization/synchronization-service.js';
 import {
   ConflictError,
@@ -13,6 +14,7 @@ import {
 
 export function buildApiApp(options?: {
   catalogService?: CatalogService;
+  settlementService?: SettlementService;
   synchronizationService?: SynchronizationService;
 }) {
   const app = Fastify({
@@ -144,6 +146,26 @@ export function buildApiApp(options?: {
       synchronization.syncFixtureResult(
         (request.params as { fixtureId: string }).fixtureId,
       ),
+    );
+  }
+
+  if (options?.settlementService) {
+    const settlement = options.settlementService;
+
+    app.post('/api/selections/:id/evaluate', (request) =>
+      settlement.reEvaluateSelection((request.params as { id: string }).id),
+    );
+    app.post('/api/bulletins/:id/evaluate', (request) =>
+      settlement.reEvaluateBulletin((request.params as { id: string }).id),
+    );
+    app.patch('/api/selections/:id/settlement-override', (request) =>
+      settlement.setManualOverride(
+        (request.params as { id: string }).id,
+        request.body,
+      ),
+    );
+    app.delete('/api/selections/:id/settlement-override', (request) =>
+      settlement.resetManualOverride((request.params as { id: string }).id),
     );
   }
 

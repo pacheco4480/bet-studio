@@ -7,7 +7,10 @@ import type {
   SelectionResultSnapshot,
   SettlementOverride,
 } from '../../../domain/core/types.js';
-import type { BulletinId } from '../../../domain/shared/ids.js';
+import type {
+  BulletinId,
+  BulletinSelectionId,
+} from '../../../domain/shared/ids.js';
 import type { BetStudioDatabase } from '../connection.js';
 import {
   bulletinCodeSequence,
@@ -94,10 +97,27 @@ export class DrizzleBulletinRepository {
         }
 
         for (const override of item.overrides ?? []) {
-          tx.insert(settlementOverrides).values(override).run();
+          tx.insert(settlementOverrides)
+            .values(override)
+            .onConflictDoNothing()
+            .run();
         }
       }
     });
+  }
+
+  findBySelectionId(id: BulletinSelectionId): BulletinAggregate | null {
+    const selection = this.db
+      .select()
+      .from(bulletinSelections)
+      .where(eq(bulletinSelections.id, id))
+      .get();
+
+    if (!selection) {
+      return null;
+    }
+
+    return this.findById(selection.bulletinId as BulletinId);
   }
 
   findById(id: BulletinId): BulletinAggregate | null {

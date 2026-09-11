@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { CatalogService } from '../../application/catalog/catalog-service.js';
+import type { SettlementService } from '../../application/settlement/settlement-service.js';
 import { SynchronizationService } from '../../application/synchronization/synchronization-service.js';
 import { DrizzleCatalogRepository } from '../../infrastructure/database/repositories/catalog-repository.js';
 import { DrizzleSyncRepository } from '../../infrastructure/database/repositories/sync-repository.js';
@@ -210,6 +211,112 @@ describe('Bet Studio synchronization API', () => {
     } finally {
       await app.close();
       database.cleanup();
+    }
+  });
+});
+
+describe('Bet Studio settlement API', () => {
+  it('exposes selection and bulletin settlement actions', async () => {
+    const calls: string[] = [];
+    const app = buildApiApp({
+      settlementService: {
+        reEvaluateSelection: (id: string) => {
+          calls.push(`selection:${id}`);
+          return {
+            selectionId: id,
+            calculatedStatus: 'GREEN',
+            manualStatus: null,
+            effectiveStatus: 'GREEN',
+            result: {
+              status: 'GREEN',
+              evaluatorKey: 'TOTAL_GOALS',
+              evaluatorVersion: 1,
+              reasonCode: 'TOTAL_GOALS_MATCHED',
+            },
+            resultSnapshot: {},
+          };
+        },
+        reEvaluateBulletin: (id: string) => {
+          calls.push(`bulletin:${id}`);
+          return { bulletinId: id, status: 'GREEN', selections: [] };
+        },
+        setManualOverride: (id: string, input: unknown) => {
+          calls.push(`override:${id}:${JSON.stringify(input)}`);
+          return {
+            selectionId: id,
+            calculatedStatus: 'GREEN',
+            manualStatus: 'VOID',
+            effectiveStatus: 'VOID',
+            result: {
+              status: 'GREEN',
+              evaluatorKey: null,
+              evaluatorVersion: null,
+              reasonCode: 'MANUAL_SETTLEMENT_REQUIRED',
+            },
+            resultSnapshot: {},
+          };
+        },
+        resetManualOverride: (id: string) => {
+          calls.push(`reset:${id}`);
+          return {
+            selectionId: id,
+            calculatedStatus: 'GREEN',
+            manualStatus: null,
+            effectiveStatus: 'GREEN',
+            result: {
+              status: 'GREEN',
+              evaluatorKey: null,
+              evaluatorVersion: null,
+              reasonCode: 'MANUAL_SETTLEMENT_REQUIRED',
+            },
+            resultSnapshot: {},
+          };
+        },
+      } as unknown as SettlementService,
+    });
+
+    try {
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: '/api/selections/selection-1/evaluate',
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: '/api/bulletins/bulletin-1/evaluate',
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await app.inject({
+            method: 'PATCH',
+            url: '/api/selections/selection-1/settlement-override',
+            payload: { status: 'VOID', reason: 'Manual review' },
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await app.inject({
+            method: 'DELETE',
+            url: '/api/selections/selection-1/settlement-override',
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(calls).toEqual([
+        'selection:selection-1',
+        'bulletin:bulletin-1',
+        'override:selection-1:{"status":"VOID","reason":"Manual review"}',
+        'reset:selection-1',
+      ]);
+    } finally {
+      await app.close();
     }
   });
 });
