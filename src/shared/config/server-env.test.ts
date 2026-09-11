@@ -16,6 +16,8 @@ describe('loadServerEnv', () => {
       API_HOST: '127.0.0.1',
       API_PORT: 3010,
       BET_STUDIO_DB_PATH: './data/bet-studio.db',
+      GOAL_API_BASE_URL: 'https://api.goal-api.com/v1',
+      GOAL_API_TIMEOUT_MS: 10000,
     });
   });
 

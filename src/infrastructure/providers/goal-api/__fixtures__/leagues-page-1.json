@@ -1,0 +1,17 @@
+{
+  "success": true,
+  "data": [
+    {
+      "id": "152",
+      "name": "Premier League",
+      "shortName": "EPL",
+      "countryCode": "GB",
+      "country": "England"
+    }
+  ],
+  "pagination": {
+    "limit": 1,
+    "offset": 0,
+    "hasMore": true
+  }
+}

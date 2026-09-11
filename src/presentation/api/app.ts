@@ -3,15 +3,20 @@ import {
   CatalogService,
   listQuerySchema,
 } from '../../application/catalog/catalog-service.js';
+import type { SynchronizationService } from '../../application/synchronization/synchronization-service.js';
 import {
   ConflictError,
   NotFoundError,
+  ProviderError,
   ValidationError,
 } from '../../shared/errors.js';
 
-export function buildApiApp(options?: { catalogService?: CatalogService }) {
+export function buildApiApp(options?: {
+  catalogService?: CatalogService;
+  synchronizationService?: SynchronizationService;
+}) {
   const app = Fastify({
-    logger: false,
+    logger: true,
   });
 
   app.get('/api/health', () => {
@@ -106,7 +111,47 @@ export function buildApiApp(options?: { catalogService?: CatalogService }) {
     );
   }
 
-  app.setErrorHandler((error, _request, reply) => {
+  if (options?.synchronizationService) {
+    const synchronization = options.synchronizationService;
+
+    app.get('/api/providers', () => ({
+      items: synchronization.getProviderStatuses(),
+    }));
+    app.get(
+      '/api/providers/goal/status',
+      () => synchronization.getProviderStatuses()[0] ?? null,
+    );
+    app.post('/api/sync/competitions', async (request) => {
+      const body = (request.body ?? {}) as { maxPages?: number };
+      return synchronization.syncCompetitions(body);
+    });
+    app.post('/api/sync/competitions/:competitionId/teams', async (request) =>
+      synchronization.syncTeams(
+        (request.params as { competitionId: string }).competitionId,
+      ),
+    );
+    app.post('/api/sync/teams', async () => synchronization.syncAllTeams());
+    app.post('/api/sync/fixtures', async (request) => {
+      const body = (request.body ?? {}) as {
+        date?: string;
+        competitionExternalId?: string;
+        from?: string;
+        to?: string;
+      };
+      return synchronization.syncFixtures(body);
+    });
+    app.post('/api/sync/fixtures/:fixtureId/result', async (request) =>
+      synchronization.syncFixtureResult(
+        (request.params as { fixtureId: string }).fixtureId,
+      ),
+    );
+  }
+
+  app.setErrorHandler((error, request, reply) => {
+    request.log.error(
+      { error: error instanceof Error ? error.message : error },
+      'API request failed',
+    );
     if (error instanceof ValidationError)
       return reply
         .code(400)
@@ -119,6 +164,11 @@ export function buildApiApp(options?: { catalogService?: CatalogService }) {
       return reply
         .code(409)
         .send({ error: error.code, message: error.message });
+    if (error instanceof ProviderError) {
+      return reply
+        .code(503)
+        .send({ error: error.code, message: error.message });
+    }
     if (typeof error === 'object' && error !== null && 'issues' in error) {
       return reply
         .code(400)

@@ -2,7 +2,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { CatalogService } from '../../application/catalog/catalog-service.js';
+import { SynchronizationService } from '../../application/synchronization/synchronization-service.js';
 import { DrizzleCatalogRepository } from '../../infrastructure/database/repositories/catalog-repository.js';
+import { DrizzleSyncRepository } from '../../infrastructure/database/repositories/sync-repository.js';
 import { createMigratedTestDatabase } from '../../infrastructure/database/test-utils.js';
 import { buildApiApp } from './app.js';
 
@@ -142,6 +144,69 @@ describe('Bet Studio catalog API', () => {
 
       expect(response.statusCode).toBe(400);
       expect(response.json<{ error: string }>().error).toBe('VALIDATION_ERROR');
+    } finally {
+      await app.close();
+      database.cleanup();
+    }
+  });
+});
+
+describe('Bet Studio synchronization API', () => {
+  it('exposes provider status and manual competition sync', async () => {
+    const database = createMigratedTestDatabase();
+    const app = buildApiApp({
+      synchronizationService: new SynchronizationService(
+        new DrizzleSyncRepository(database.db),
+        {
+          code: 'GOAL_API',
+          displayName: 'GOAL API',
+          capabilities: {
+            competitions: true,
+            teams: true,
+            fixtures: true,
+            liveScores: true,
+            finalScores: true,
+            fixtureStatistics: true,
+            corners: false,
+            teamLogos: false,
+            competitionLogos: false,
+          },
+          listCompetitions: () =>
+            Promise.resolve([
+              {
+                providerCode: 'GOAL_API',
+                externalId: '152',
+                name: 'Premier League',
+                shortName: 'EPL',
+                countryCode: 'GB',
+                regionName: 'England',
+                logoUrl: null,
+              },
+            ]),
+          listTeams: () => Promise.resolve([]),
+          listFixtures: () => Promise.resolve([]),
+          getFixture: () => Promise.resolve(null),
+        },
+      ),
+    });
+
+    try {
+      const status = await app.inject({
+        method: 'GET',
+        url: '/api/providers/goal/status',
+      });
+      expect(status.statusCode).toBe(200);
+      expect(status.json<{ configured: boolean }>().configured).toBe(true);
+
+      const sync = await app.inject({
+        method: 'POST',
+        url: '/api/sync/competitions',
+      });
+      expect(sync.statusCode).toBe(200);
+      expect(sync.json<{ created: number; status: string }>()).toMatchObject({
+        status: 'SUCCESS',
+        created: 1,
+      });
     } finally {
       await app.close();
       database.cleanup();

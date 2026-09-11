@@ -218,6 +218,35 @@ terms of use.
 
 Provider documentation changes over time and must not be permanently encoded in architecture documentation without verification.
 
+Phase 04 verified GOAL API against the official documentation at `https://goal-api.com/documentation`.
+
+Implemented configuration:
+
+- `GOAL_API_KEY`
+- `GOAL_API_BASE_URL`, defaulting to `https://api.goal-api.com/v1`
+- `GOAL_API_TIMEOUT_MS`, defaulting to `10000`
+
+Verified request behavior:
+
+- REST requests use `Authorization: Bearer <key>`.
+- List responses use a JSON `success` flag, `data` payload and optional `pagination`.
+- Pagination uses `limit`, `offset` and `hasMore`.
+- Fixtures expose UTC kickoff through `kickoffUtc`.
+- Rate-limit metadata is exposed through `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` and `X-RateLimit-Type`.
+
+Implemented GOAL API adapter capabilities:
+
+- competitions: supported through `/leagues`
+- teams: supported through `/leagues/:id/teams`
+- fixtures: supported through `/fixtures`, `/fixtures/date/:date` and `/leagues/:id/fixtures`
+- liveScores: supported for manual refresh through fixture data
+- finalScores: supported through fixture/result data
+- fixtureStatistics: endpoint exists, but only fixture-level details needed by this phase are normalized
+- corners: not enabled, because the public documentation does not specify a stable normalized corner field in the consumed fixture payload
+- teamLogos and competitionLogos: not enabled, because safe local asset ingestion is not implemented yet
+
+GOAL API status normalization is adapter-local. Documented/common values such as `NS`, `TBD`, `1H`, `2H`, `HT`, `FT`, `AET`, `PEN`, `PST`, `CANC` and `ABD` map to the Bet Studio fixture status model. Unknown provider status values map to `UNKNOWN`.
+
 9. Manual Provider
 
 Manual/local operation is conceptually the ultimate fallback.

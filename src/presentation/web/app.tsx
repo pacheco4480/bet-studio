@@ -30,12 +30,33 @@ type Market = {
   parameters: unknown;
 };
 
-type Tab = 'competitions' | 'teams' | 'markets';
+type ProviderStatus = {
+  code: string;
+  displayName: string;
+  configured: boolean;
+  lastSuccessfulSyncAt: string | null;
+};
+
+type SyncResult = {
+  status: string;
+  processed: number;
+  created: number;
+  updated: number;
+  unresolved: number;
+  failed: number;
+  message: string | null;
+};
+
+type Tab = 'competitions' | 'teams' | 'markets' | 'fixtures';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers = new Headers(options?.headers);
+  if (options?.body && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
   const response = await fetch(path, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers,
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as {
@@ -61,25 +82,28 @@ export function App() {
             <h1 className="mt-3 text-3xl font-bold">Catalog Management</h1>
           </div>
           <nav className="flex gap-2" aria-label="Catalog sections">
-            {(['competitions', 'teams', 'markets'] as const).map((item) => (
-              <button
-                key={item}
-                className={`rounded border px-4 py-2 text-sm font-medium capitalize focus:outline focus:outline-2 focus:outline-studio-lime ${
-                  tab === item
-                    ? 'border-studio-lime bg-studio-lime text-black'
-                    : 'border-white/10 bg-studio-panel text-slate-200'
-                }`}
-                onClick={() => setTab(item)}
-                type="button"
-              >
-                {item}
-              </button>
-            ))}
+            {(['competitions', 'teams', 'markets', 'fixtures'] as const).map(
+              (item) => (
+                <button
+                  key={item}
+                  className={`rounded border px-4 py-2 text-sm font-medium capitalize focus:outline focus:outline-2 focus:outline-studio-lime ${
+                    tab === item
+                      ? 'border-studio-lime bg-studio-lime text-black'
+                      : 'border-white/10 bg-studio-panel text-slate-200'
+                  }`}
+                  onClick={() => setTab(item)}
+                  type="button"
+                >
+                  {item}
+                </button>
+              ),
+            )}
           </nav>
         </header>
         {tab === 'competitions' && <CompetitionsPanel />}
         {tab === 'teams' && <TeamsPanel />}
         {tab === 'markets' && <MarketsPanel />}
+        {tab === 'fixtures' && <FixturesPanel />}
       </div>
     </main>
   );
@@ -90,6 +114,9 @@ function Toolbar(props: {
   setSearch: (value: string) => void;
   active: string;
   setActive: (value: string) => void;
+  competitions?: Competition[];
+  competitionId?: string;
+  setCompetitionId?: (value: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-3 md:flex-row">
@@ -110,6 +137,23 @@ function Toolbar(props: {
           <option value="inactive">Inactive</option>
         </select>
       </label>
+      {props.competitions && props.setCompetitionId && (
+        <label className="text-sm text-slate-300">
+          Competition
+          <select
+            className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-white"
+            value={props.competitionId ?? ''}
+            onChange={(event) => props.setCompetitionId?.(event.target.value)}
+          >
+            <option value="">All competitions</option>
+            {props.competitions.map((competition) => (
+              <option key={competition.id} value={competition.id}>
+                {competition.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
     </div>
   );
 }
@@ -133,6 +177,18 @@ function CompetitionsPanel() {
 
   return (
     <CatalogSection title="Competitions" error={error}>
+      <SyncPanel
+        actionLabel="Refresh GOAL API competitions"
+        onSync={() =>
+          request<SyncResult>('/api/sync/competitions', {
+            method: 'POST',
+            body: JSON.stringify({
+              maxPages: 100,
+            }),
+          })
+        }
+        onSynced={load}
+      />
       <Toolbar
         search={search}
         setSearch={setSearch}
@@ -219,28 +275,157 @@ function TeamsPanel() {
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [search, setSearch] = useState('');
   const [active, setActive] = useState('all');
+  const [competitionId, setCompetitionId] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [allSyncLoading, setAllSyncLoading] = useState(false);
+  const [allSyncStatus, setAllSyncStatus] = useState<string | null>(null);
+  const [allSyncError, setAllSyncError] = useState<string | null>(null);
+  const [allSyncResult, setAllSyncResult] = useState<SyncResult | null>(null);
   const [editing, setEditing] = useState<Team | null>(null);
+  const [syncCompetitionId, setSyncCompetitionId] = useState('');
+  const groupedTeams = useMemo(() => {
+    const groups = new Map<string, Team[]>();
+    for (const team of items) {
+      const names = team.competitions.map((competition) => competition.name);
+      const groupNames = names.length > 0 ? names : ['Unassigned'];
+      for (const name of groupNames) {
+        const group = groups.get(name) ?? [];
+        group.push(team);
+        groups.set(name, group);
+      }
+    }
+    return [...groups.entries()].sort(([left], [right]) =>
+      left.localeCompare(right),
+    );
+  }, [items]);
   const load = useCallback(async () => {
     const [teamsResult, competitionsResult] = await Promise.all([
       request<{ items: Team[] }>(
-        `/api/teams?search=${encodeURIComponent(search)}&active=${active}`,
+        `/api/teams?search=${encodeURIComponent(search)}&active=${active}${competitionId ? `&competitionId=${encodeURIComponent(competitionId)}` : ''}`,
       ),
       request<{ items: Competition[] }>('/api/competitions?active=all'),
     ]);
     setItems(teamsResult.items);
     setCompetitions(competitionsResult.items);
-  }, [active, search]);
+  }, [active, competitionId, search]);
   useEffect(() => {
     void load().catch((err: Error) => setError(err.message));
   }, [load]);
   return (
     <CatalogSection title="Teams" error={error}>
+      <SyncPanel
+        actionLabel="Refresh selected GOAL API competition"
+        disabled={!syncCompetitionId}
+        onSync={() =>
+          syncCompetitionId
+            ? request<SyncResult>(
+                `/api/sync/competitions/${syncCompetitionId}/teams`,
+                {
+                  method: 'POST',
+                },
+              )
+            : Promise.reject(new Error('Select a competition first'))
+        }
+        onSynced={load}
+      >
+        <button
+          type="button"
+          disabled={allSyncLoading}
+          className="rounded border border-studio-lime px-4 py-2 font-semibold text-studio-lime disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={() => {
+            setAllSyncError(null);
+            setAllSyncLoading(true);
+            setAllSyncResult(null);
+            void (async () => {
+              const targets = competitions.filter(
+                (competition) => competition.active,
+              );
+              const results: SyncResult[] = [];
+              for (const [index, competition] of targets.entries()) {
+                setAllSyncStatus(
+                  `Syncing ${competition.name} (${index + 1}/${targets.length})...`,
+                );
+                try {
+                  results.push(
+                    await request<SyncResult>(
+                      `/api/sync/competitions/${competition.id}/teams`,
+                      { method: 'POST' },
+                    ),
+                  );
+                } catch (err) {
+                  setAllSyncError(
+                    err instanceof Error
+                      ? err.message
+                      : 'Synchronization failed',
+                  );
+                }
+              }
+              setAllSyncStatus('All competitions synchronized');
+              setAllSyncResult({
+                status: results.some((result) => result.status !== 'SUCCESS')
+                  ? 'PARTIAL'
+                  : 'SUCCESS',
+                processed: results.reduce(
+                  (sum, result) => sum + result.processed,
+                  0,
+                ),
+                created: results.reduce(
+                  (sum, result) => sum + result.created,
+                  0,
+                ),
+                updated: results.reduce(
+                  (sum, result) => sum + result.updated,
+                  0,
+                ),
+                unresolved: results.reduce(
+                  (sum, result) => sum + result.unresolved,
+                  0,
+                ),
+                failed: results.reduce((sum, result) => sum + result.failed, 0),
+                message: null,
+              });
+              await load();
+            })().finally(() => setAllSyncLoading(false));
+          }}
+        >
+          {allSyncLoading
+            ? 'Syncing all competitions...'
+            : 'Sync all competitions'}
+        </button>
+        <label className="text-sm text-slate-300">
+          Competition
+          <select
+            className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-white"
+            value={syncCompetitionId}
+            onChange={(event) => setSyncCompetitionId(event.target.value)}
+          >
+            <option value="">Select competition</option>
+            {competitions.map((competition) => (
+              <option key={competition.id} value={competition.id}>
+                {competition.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {allSyncError && <p className="text-sm text-red-200">{allSyncError}</p>}
+        {allSyncStatus && (
+          <p className="text-sm text-slate-300">{allSyncStatus}</p>
+        )}
+        {allSyncResult && (
+          <p className="text-sm text-slate-300">
+            {allSyncResult.status}: {allSyncResult.processed} processed,{' '}
+            {allSyncResult.created} created, {allSyncResult.updated} updated
+          </p>
+        )}
+      </SyncPanel>
       <Toolbar
         search={search}
         setSearch={setSearch}
         active={active}
         setActive={setActive}
+        competitions={competitions}
+        competitionId={competitionId}
+        setCompetitionId={setCompetitionId}
       />
       <TeamForm
         current={editing}
@@ -250,32 +435,40 @@ function TeamsPanel() {
           void load();
         }}
       />
-      <div className="grid gap-3">
-        {items.map((item) => (
-          <TeamCard
-            key={item.id}
-            team={item}
-            onEdit={() => setEditing(item)}
-            onToggle={() =>
-              void request(`/api/teams/${item.id}`, {
-                method: 'PATCH',
-                body: JSON.stringify({ active: !item.active }),
-              }).then(load)
-            }
-            onRemoveAlias={(aliasId) =>
-              void request(`/api/teams/${item.id}/aliases/${aliasId}`, {
-                method: 'DELETE',
-              }).then(load)
-            }
-            onRemoveCompetition={(competitionId) =>
-              void request(
-                `/api/teams/${item.id}/competitions/${competitionId}`,
-                {
-                  method: 'DELETE',
-                },
-              ).then(load)
-            }
-          />
+      <div className="grid gap-6">
+        {groupedTeams.map(([competitionName, teams]) => (
+          <section key={competitionName} className="grid gap-3">
+            <div className="flex items-baseline justify-between border-b border-white/10 pb-2">
+              <h3 className="text-lg font-semibold">{competitionName}</h3>
+              <span className="text-sm text-slate-500">
+                {teams.length} {teams.length === 1 ? 'team' : 'teams'}
+              </span>
+            </div>
+            {teams.map((item) => (
+              <TeamCard
+                key={`${competitionName}-${item.id}`}
+                team={item}
+                onEdit={() => setEditing(item)}
+                onToggle={() =>
+                  void request(`/api/teams/${item.id}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ active: !item.active }),
+                  }).then(load)
+                }
+                onRemoveAlias={(aliasId) =>
+                  void request(`/api/teams/${item.id}/aliases/${aliasId}`, {
+                    method: 'DELETE',
+                  }).then(load)
+                }
+                onRemoveCompetition={(competitionId) =>
+                  void request(
+                    `/api/teams/${item.id}/competitions/${competitionId}`,
+                    { method: 'DELETE' },
+                  ).then(load)
+                }
+              />
+            ))}
+          </section>
         ))}
       </div>
     </CatalogSection>
@@ -455,6 +648,15 @@ function MarketForm(props: { current: Market | null; onSaved: () => void }) {
             parameters: autoEvaluable ? parameters : null,
           }),
         });
+        if (!current) {
+          setCode('');
+          setName('');
+          setCategory('');
+          setAutoEvaluable(false);
+          setEvaluatorKey('TOTAL_GOALS');
+          setLine('2.5');
+          setChoice('OVER');
+        }
         props.onSaved();
       }}
     >
@@ -523,6 +725,90 @@ function MarketForm(props: { current: Market | null; onSaved: () => void }) {
         </>
       )}
     </EntityForm>
+  );
+}
+
+function FixturesPanel() {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+
+  return (
+    <CatalogSection title="Fixtures" error={null}>
+      <SyncPanel
+        actionLabel="Refresh GOAL API fixtures"
+        onSync={() =>
+          request<SyncResult>('/api/sync/fixtures', {
+            method: 'POST',
+            body: JSON.stringify({ date }),
+          })
+        }
+      >
+        <TextInput label="Date" value={date} onChange={setDate} required />
+      </SyncPanel>
+    </CatalogSection>
+  );
+}
+
+function SyncPanel(props: {
+  actionLabel: string;
+  children?: React.ReactNode;
+  disabled?: boolean;
+  onSync: () => Promise<SyncResult>;
+  onSynced?: () => Promise<void>;
+}) {
+  const [provider, setProvider] = useState<ProviderStatus | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<SyncResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void request<ProviderStatus | null>('/api/providers/goal/status')
+      .then(setProvider)
+      .catch(() => setProvider(null));
+  }, []);
+
+  return (
+    <section className="grid gap-3 rounded border border-white/10 bg-studio-panel p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h3 className="font-semibold">GOAL API</h3>
+          <p className="mt-1 text-sm text-slate-400">
+            {provider?.configured
+              ? `Available${provider.lastSuccessfulSyncAt ? ` | Last sync ${provider.lastSuccessfulSyncAt}` : ''}`
+              : 'Not configured'}
+          </p>
+        </div>
+        <div className="flex flex-col gap-3 md:flex-row md:items-end">
+          {props.children}
+          <button
+            type="button"
+            disabled={loading || props.disabled}
+            className="rounded bg-studio-lime px-4 py-2 font-semibold text-black disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300"
+            onClick={() => {
+              setLoading(true);
+              setError(null);
+              void props
+                .onSync()
+                .then(async (nextResult) => {
+                  setResult(nextResult);
+                  await props.onSynced?.();
+                })
+                .catch((err: Error) => setError(err.message))
+                .finally(() => setLoading(false));
+            }}
+          >
+            {loading ? 'Refreshing' : props.actionLabel}
+          </button>
+        </div>
+      </div>
+      {result && (
+        <p className="text-sm text-slate-300">
+          {result.status}: {result.processed} processed, {result.created}{' '}
+          created, {result.updated} updated, {result.unresolved} unresolved,{' '}
+          {result.failed} failed
+        </p>
+      )}
+      {error && <p className="text-sm text-red-200">{error}</p>}
+    </section>
   );
 }
 

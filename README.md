@@ -620,7 +620,7 @@ to:
 
 and configure only the integrations you intend to use.
 
-The Phase 01 foundation only uses:
+Core local operation uses:
 
 ```text
 NODE_ENV
@@ -629,8 +629,15 @@ API_PORT
 BET_STUDIO_DB_PATH
 ```
 
-External providers are optional and will be configured in later phases.
-Bet Studio should remain operational without football API credentials.
+GOAL API synchronization is optional and server-side only:
+
+```text
+GOAL_API_KEY
+GOAL_API_BASE_URL
+GOAL_API_TIMEOUT_MS
+```
+
+If `GOAL_API_KEY` is absent, Bet Studio remains operational in local/manual mode.
 
 Never commit:
 

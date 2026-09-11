@@ -1,0 +1,17 @@
+{
+  "success": true,
+  "data": [
+    {
+      "id": "302",
+      "name": "Liga Portugal",
+      "shortName": "Liga PT",
+      "countryCode": "PT",
+      "country": "Portugal"
+    }
+  ],
+  "pagination": {
+    "limit": 1,
+    "offset": 1,
+    "hasMore": false
+  }
+}

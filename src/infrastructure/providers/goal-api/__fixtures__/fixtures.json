@@ -1,0 +1,26 @@
+{
+  "success": true,
+  "data": [
+    {
+      "id": "match_1",
+      "leagueId": "152",
+      "homeTeamId": "team_home",
+      "awayTeamId": "team_away",
+      "homeTeam": "Arsenal",
+      "awayTeam": "Chelsea",
+      "kickoffUtc": "2026-09-11T19:45:00.000Z",
+      "status": "FT",
+      "score": {
+        "home": "2",
+        "away": "1"
+      },
+      "halfTimeHomeScore": "1",
+      "halfTimeAwayScore": "0"
+    }
+  ],
+  "pagination": {
+    "limit": 50,
+    "offset": 0,
+    "hasMore": false
+  }
+}
