@@ -30,6 +30,68 @@ type Market = {
   parameters: unknown;
 };
 
+type FixtureOption = {
+  fixture: {
+    id: string;
+    kickoffAt: string | null;
+    status: string;
+    homeScore: number | null;
+    awayScore: number | null;
+    liveMinute: number | null;
+  };
+  homeTeam: Team;
+  awayTeam: Team;
+  competition: Competition | null;
+};
+
+type BulletinSelectionDto = {
+  selection: {
+    id: string;
+    position: number;
+    fixtureId: string | null;
+    marketId: string | null;
+    odd: string;
+    calculatedStatus: string;
+    manualStatus: string | null;
+  };
+  snapshot: {
+    homeTeamName: string;
+    awayTeamName: string;
+    competitionName: string | null;
+    marketCode: string;
+    marketName: string;
+    kickoffAt: string | null;
+  };
+  fixture: FixtureOption | null;
+  market: Market | null;
+  effectiveStatus: string;
+};
+
+type BulletinDto = {
+  bulletin: {
+    id: string;
+    publicCode: string;
+    type: 'SINGLE' | 'MULTI';
+    mode: 'PRE_MATCH' | 'LIVE';
+    status: string;
+    stake: string | null;
+    totalOdd: string | null;
+    renderConfig: Record<string, boolean>;
+  };
+  selections: BulletinSelectionDto[];
+};
+
+type BulletinListItem = {
+  id: string;
+  publicCode: string;
+  type: string;
+  mode: string;
+  status: string;
+  totalOdd: string | null;
+  selectionCount: number;
+  updatedAt: string;
+};
+
 type ProviderStatus = {
   code: string;
   displayName: string;
@@ -65,7 +127,13 @@ type BulletinEvaluationResult = {
   selections: EvaluatedSelection[];
 };
 
-type Tab = 'competitions' | 'teams' | 'markets' | 'fixtures' | 'settlement';
+type Tab =
+  | 'bulletins'
+  | 'competitions'
+  | 'teams'
+  | 'markets'
+  | 'fixtures'
+  | 'settlement';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers = new Headers(options?.headers);
@@ -87,7 +155,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export function App() {
-  const [tab, setTab] = useState<Tab>('competitions');
+  const [tab, setTab] = useState<Tab>('bulletins');
 
   return (
     <main className="min-h-screen bg-studio-ink text-white">
@@ -102,6 +170,7 @@ export function App() {
           <nav className="flex gap-2" aria-label="Catalog sections">
             {(
               [
+                'bulletins',
                 'competitions',
                 'teams',
                 'markets',
@@ -125,6 +194,7 @@ export function App() {
           </nav>
         </header>
         {tab === 'competitions' && <CompetitionsPanel />}
+        {tab === 'bulletins' && <BulletinsPanel />}
         {tab === 'teams' && <TeamsPanel />}
         {tab === 'markets' && <MarketsPanel />}
         {tab === 'fixtures' && <FixturesPanel />}
@@ -181,6 +251,846 @@ function Toolbar(props: {
       )}
     </div>
   );
+}
+
+type DraftSelection = {
+  id?: string;
+  fixtureId: string;
+  marketId: string;
+  odd: string;
+};
+
+type BulletinDraft = {
+  id?: string;
+  type: 'SINGLE' | 'MULTI';
+  mode: 'PRE_MATCH' | 'LIVE';
+  stake: string;
+  renderConfig: Record<string, boolean>;
+  selections: DraftSelection[];
+};
+
+const defaultDraft: BulletinDraft = {
+  type: 'SINGLE',
+  mode: 'PRE_MATCH',
+  stake: '',
+  renderConfig: {
+    showCompetition: true,
+    showDate: true,
+    showTime: true,
+    showStake: true,
+    showTotalOdd: true,
+    showResult: true,
+    showBulletinCode: true,
+  },
+  selections: [{ fixtureId: '', marketId: '', odd: '1.50' }],
+};
+
+function BulletinsPanel() {
+  const [items, setItems] = useState<BulletinListItem[]>([]);
+  const [fixtures, setFixtures] = useState<FixtureOption[]>([]);
+  const [markets, setMarkets] = useState<Market[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [competitions, setCompetitions] = useState<Competition[]>([]);
+  const [draft, setDraft] = useState<BulletinDraft>(defaultDraft);
+  const [saved, setSaved] = useState<BulletinDto | null>(null);
+  const [saveState, setSaveState] = useState('Unsaved');
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    const [
+      bulletins,
+      fixtureResult,
+      marketResult,
+      teamResult,
+      competitionResult,
+    ] = await Promise.all([
+      request<{ items: BulletinListItem[] }>('/api/bulletins'),
+      request<{ items: FixtureOption[] }>('/api/builder/fixtures?limit=100'),
+      request<{ items: Market[] }>(
+        '/api/builder/markets?activeOnly=false&limit=200',
+      ),
+      request<{ items: Team[] }>('/api/teams?active=all'),
+      request<{ items: Competition[] }>('/api/competitions?active=all'),
+    ]);
+    setItems(bulletins.items);
+    setFixtures(fixtureResult.items);
+    setMarkets(marketResult.items);
+    setTeams(teamResult.items);
+    setCompetitions(competitionResult.items);
+  }, []);
+
+  useEffect(() => {
+    void load().catch((err: Error) => setError(err.message));
+  }, [load]);
+
+  const totalOdd = useMemo(
+    () => calculateDraftTotalOdd(draft.type, draft.selections),
+    [draft],
+  );
+  const potentialReturn = useMemo(
+    () => calculateDraftPotentialReturn(draft.stake, totalOdd),
+    [draft.stake, totalOdd],
+  );
+  const canAdd = draft.type === 'MULTI' && draft.selections.length < 10;
+
+  async function saveDraft() {
+    setError(null);
+    const incompleteSelectionIndex = draft.selections.findIndex(
+      (selection) =>
+        !selection.fixtureId || !selection.marketId || !selection.odd.trim(),
+    );
+    if (incompleteSelectionIndex >= 0) {
+      setError(
+        `Complete fixture, market and odd for selection ${incompleteSelectionIndex + 1}`,
+      );
+      setSaveState('Unsaved');
+      return;
+    }
+    const duplicateFixtureId = findDuplicateFixtureId(draft.selections);
+    if (duplicateFixtureId) {
+      setError('Each fixture can only be used once in the same bulletin');
+      setSaveState('Unsaved');
+      return;
+    }
+    setSaveState('Saving');
+    const payload = {
+      type: draft.type,
+      mode: draft.mode,
+      stake: draft.stake || null,
+      renderConfig: draft.renderConfig,
+      selections: draft.selections,
+    };
+    const result = await request<BulletinDto>(
+      draft.id ? `/api/bulletins/${draft.id}` : '/api/bulletins',
+      {
+        method: draft.id ? 'PATCH' : 'POST',
+        body: JSON.stringify(payload),
+      },
+    );
+    setSaved(result);
+    setDraft(fromBulletin(result));
+    setSaveState(`Saved ${result.bulletin.publicCode}`);
+    await load();
+  }
+
+  async function openBulletin(id: string) {
+    const result = await request<BulletinDto>(`/api/bulletins/${id}`);
+    setSaved(result);
+    setDraft(fromBulletin(result));
+    setSaveState(`Opened ${result.bulletin.publicCode}`);
+  }
+
+  async function duplicateBulletin() {
+    if (!draft.id) return;
+    const result = await request<BulletinDto>(
+      `/api/bulletins/${draft.id}/duplicate`,
+      { method: 'POST' },
+    );
+    setSaved(result);
+    setDraft(fromBulletin(result));
+    setSaveState(`Duplicated as ${result.bulletin.publicCode}`);
+    await load();
+  }
+
+  return (
+    <CatalogSection title="Bulletins" error={error}>
+      <section className="grid gap-4 rounded border border-white/10 bg-studio-panel p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="text-sm text-slate-300">
+            Type
+            <select
+              className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-white"
+              value={draft.type}
+              onChange={(event) => {
+                const value = event.target.value as BulletinDraft['type'];
+                if (value === 'SINGLE' && draft.selections.length > 1) {
+                  setError('Remove extra selections before changing to SINGLE');
+                  return;
+                }
+                setDraft({ ...draft, type: value });
+                setSaveState('Unsaved');
+              }}
+            >
+              <option value="SINGLE">SINGLE</option>
+              <option value="MULTI">MULTI</option>
+            </select>
+          </label>
+          <label className="text-sm text-slate-300">
+            Mode
+            <select
+              className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-white"
+              value={draft.mode}
+              onChange={(event) => {
+                setDraft({
+                  ...draft,
+                  mode: event.target.value as BulletinDraft['mode'],
+                });
+                setSaveState('Unsaved');
+              }}
+            >
+              <option value="PRE_MATCH">PRE_MATCH</option>
+              <option value="LIVE">LIVE</option>
+            </select>
+          </label>
+          <TextInput
+            label="Stake"
+            value={draft.stake}
+            onChange={(value) => {
+              setDraft({ ...draft, stake: value });
+              setSaveState('Unsaved');
+            }}
+          />
+          <div className="text-sm text-slate-300">
+            <p>Total odd</p>
+            <strong className="text-xl text-white">{totalOdd}</strong>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {Object.keys(defaultDraft.renderConfig).map((key) => (
+            <label
+              key={key}
+              className="flex items-center gap-2 text-sm text-slate-300"
+            >
+              <input
+                type="checkbox"
+                checked={draft.renderConfig[key] ?? true}
+                onChange={(event) => {
+                  setDraft({
+                    ...draft,
+                    renderConfig: {
+                      ...draft.renderConfig,
+                      [key]: event.target.checked,
+                    },
+                  });
+                  setSaveState('Unsaved');
+                }}
+              />
+              {key}
+            </label>
+          ))}
+        </div>
+      </section>
+      <CreateFixtureForm
+        teams={teams}
+        competitions={competitions}
+        onCreated={async (fixture) => {
+          await load();
+          setDraft((current) => ({
+            ...current,
+            selections: assignFixtureToDraftSelections(current, fixture),
+          }));
+          setSaveState('Unsaved');
+        }}
+      />
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <div className="grid gap-3">
+          {draft.selections.map((selection, index) => (
+            <SelectionEditor
+              key={selection.id ?? index}
+              selection={selection}
+              index={index}
+              fixtures={fixtures}
+              markets={markets}
+              selectedFixtureIds={draft.selections
+                .filter((_, itemIndex) => itemIndex !== index)
+                .map((item) => item.fixtureId)
+                .filter(Boolean)}
+              canRemove={draft.selections.length > 1}
+              onChange={(next) => {
+                setDraft({
+                  ...draft,
+                  selections: draft.selections.map((item, itemIndex) =>
+                    itemIndex === index ? next : item,
+                  ),
+                });
+                setSaveState('Unsaved');
+              }}
+              onRemove={() => {
+                setDraft({
+                  ...draft,
+                  selections: draft.selections.filter(
+                    (_, itemIndex) => itemIndex !== index,
+                  ),
+                });
+                setSaveState('Unsaved');
+              }}
+              onMove={(direction) => {
+                const next = [...draft.selections];
+                const target = index + direction;
+                if (target < 0 || target >= next.length) return;
+                [next[index], next[target]] = [next[target], next[index]];
+                setDraft({ ...draft, selections: next });
+                setSaveState('Unsaved');
+              }}
+            />
+          ))}
+          <button
+            type="button"
+            disabled={!canAdd}
+            className="rounded border border-studio-lime px-4 py-2 font-semibold text-studio-lime disabled:cursor-not-allowed disabled:border-white/10 disabled:text-slate-500"
+            onClick={() => {
+              setDraft({
+                ...draft,
+                selections: [
+                  ...draft.selections,
+                  { fixtureId: '', marketId: '', odd: '1.50' },
+                ],
+              });
+              setSaveState('Unsaved');
+            }}
+          >
+            {draft.selections.length >= 10
+              ? 'Selection limit reached'
+              : 'Add selection'}
+          </button>
+        </div>
+        <BulletinPreview
+          draft={draft}
+          saved={saved}
+          fixtures={fixtures}
+          markets={markets}
+          totalOdd={totalOdd}
+          potentialReturn={potentialReturn}
+        />
+      </section>
+      <section className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          className="rounded bg-studio-lime px-4 py-2 font-semibold text-black"
+          onClick={() =>
+            void saveDraft().catch((err: Error) => {
+              setError(err.message);
+              setSaveState('Error');
+            })
+          }
+        >
+          Save bulletin
+        </button>
+        <button
+          type="button"
+          disabled={!draft.id}
+          className="rounded border border-white/10 px-4 py-2 font-semibold text-slate-200 disabled:cursor-not-allowed disabled:text-slate-500"
+          onClick={() =>
+            void duplicateBulletin().catch((err: Error) =>
+              setError(err.message),
+            )
+          }
+        >
+          Duplicate
+        </button>
+        <button
+          type="button"
+          className="rounded border border-white/10 px-4 py-2 font-semibold text-slate-200"
+          onClick={() => {
+            setDraft(defaultDraft);
+            setSaved(null);
+            setSaveState('Unsaved');
+          }}
+        >
+          New
+        </button>
+        <span className="text-sm text-slate-400">{saveState}</span>
+      </section>
+      <section className="grid gap-3">
+        <h3 className="text-lg font-semibold">Saved bulletins</h3>
+        {items.length === 0 && (
+          <p className="text-sm text-slate-500">No bulletins saved yet.</p>
+        )}
+        {items.map((item) => (
+          <article
+            key={item.id}
+            className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/10 bg-black/20 p-4"
+          >
+            <div>
+              <h4 className="font-semibold">{item.publicCode}</h4>
+              <p className="text-sm text-slate-400">
+                {item.type} | {item.mode} | {item.selectionCount} selections |{' '}
+                {item.status} | {item.totalOdd ?? 'No odd'}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="rounded border border-white/10 px-3 py-2 text-sm"
+              onClick={() =>
+                void openBulletin(item.id).catch((err: Error) =>
+                  setError(err.message),
+                )
+              }
+            >
+              Open
+            </button>
+          </article>
+        ))}
+      </section>
+    </CatalogSection>
+  );
+}
+
+function CreateFixtureForm(props: {
+  teams: Team[];
+  competitions: Competition[];
+  onCreated: (fixture: FixtureOption) => Promise<void>;
+}) {
+  const [competitionId, setCompetitionId] = useState('');
+  const [homeTeamId, setHomeTeamId] = useState('');
+  const [awayTeamId, setAwayTeamId] = useState('');
+  const [kickoffAt, setKickoffAt] = useState('');
+  const [status, setStatus] = useState('SCHEDULED');
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const availableTeams = useMemo(
+    () =>
+      competitionId
+        ? props.teams.filter((team) =>
+            team.competitions.some(
+              (competition) => competition.id === competitionId,
+            ),
+          )
+        : props.teams,
+    [competitionId, props.teams],
+  );
+
+  useEffect(() => {
+    if (homeTeamId && !availableTeams.some((team) => team.id === homeTeamId)) {
+      setHomeTeamId('');
+    }
+    if (awayTeamId && !availableTeams.some((team) => team.id === awayTeamId)) {
+      setAwayTeamId('');
+    }
+  }, [availableTeams, awayTeamId, homeTeamId]);
+
+  return (
+    <section className="grid gap-4 rounded border border-white/10 bg-studio-panel p-4">
+      <h3 className="font-semibold">Create local fixture</h3>
+      <div className="grid gap-3 md:grid-cols-5">
+        <label className="text-sm text-slate-300">
+          Competition
+          <select
+            className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-white"
+            value={competitionId}
+            onChange={(event) => setCompetitionId(event.target.value)}
+          >
+            <option value="">None</option>
+            {props.competitions.map((competition) => (
+              <option key={competition.id} value={competition.id}>
+                {competition.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <TeamSelect
+          label="Home"
+          value={homeTeamId}
+          teams={availableTeams}
+          onChange={setHomeTeamId}
+        />
+        <TeamSelect
+          label="Away"
+          value={awayTeamId}
+          teams={availableTeams}
+          onChange={setAwayTeamId}
+        />
+        <TextInput
+          label="Kickoff UTC"
+          value={kickoffAt}
+          onChange={setKickoffAt}
+        />
+        <label className="text-sm text-slate-300">
+          Status
+          <select
+            className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-white"
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+          >
+            {[
+              'SCHEDULED',
+              'LIVE',
+              'FINISHED',
+              'POSTPONED',
+              'CANCELLED',
+              'ABANDONED',
+              'UNKNOWN',
+            ].map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {error && <p className="text-sm text-red-200">{error}</p>}
+      {competitionId && availableTeams.length === 0 && (
+        <p className="text-sm text-amber-200">
+          No teams are linked to this competition yet.
+        </p>
+      )}
+      <button
+        type="button"
+        className="w-fit rounded border border-studio-lime px-4 py-2 font-semibold text-studio-lime disabled:cursor-not-allowed disabled:opacity-60"
+        disabled={
+          creating || !homeTeamId || !awayTeamId || homeTeamId === awayTeamId
+        }
+        onClick={() => {
+          setError(null);
+          setCreating(true);
+          void request<FixtureOption>('/api/builder/fixtures', {
+            method: 'POST',
+            body: JSON.stringify({
+              competitionId: competitionId || null,
+              homeTeamId,
+              awayTeamId,
+              kickoffAt: kickoffAt || null,
+              status,
+            }),
+          })
+            .then(async (fixture) => {
+              setHomeTeamId('');
+              setAwayTeamId('');
+              setKickoffAt('');
+              await props.onCreated(fixture);
+            })
+            .catch((err: Error) => setError(err.message))
+            .finally(() => setCreating(false));
+        }}
+      >
+        {creating ? 'Creating fixture' : 'Create fixture'}
+      </button>
+    </section>
+  );
+}
+
+function TeamSelect(props: {
+  label: string;
+  value: string;
+  teams: Team[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="text-sm text-slate-300">
+      {props.label}
+      <select
+        className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-white"
+        value={props.value}
+        onChange={(event) => props.onChange(event.target.value)}
+      >
+        <option value="">Select team</option>
+        {props.teams.map((team) => (
+          <option key={team.id} value={team.id}>
+            {team.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function SelectionEditor(props: {
+  selection: DraftSelection;
+  index: number;
+  fixtures: FixtureOption[];
+  markets: Market[];
+  selectedFixtureIds: string[];
+  canRemove: boolean;
+  onChange: (selection: DraftSelection) => void;
+  onRemove: () => void;
+  onMove: (direction: -1 | 1) => void;
+}) {
+  return (
+    <article className="grid gap-4 rounded border border-white/10 bg-studio-panel p-4">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="font-semibold">Selection {props.index + 1}</h3>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="rounded border border-white/10 px-3 py-2 text-sm"
+            onClick={() => props.onMove(-1)}
+          >
+            Up
+          </button>
+          <button
+            type="button"
+            className="rounded border border-white/10 px-3 py-2 text-sm"
+            onClick={() => props.onMove(1)}
+          >
+            Down
+          </button>
+          <button
+            type="button"
+            disabled={!props.canRemove}
+            className="rounded border border-white/10 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:text-slate-500"
+            onClick={props.onRemove}
+          >
+            Remove
+          </button>
+        </div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-[1fr_1fr_120px]">
+        <label className="text-sm text-slate-300">
+          Fixture
+          <select
+            className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-white"
+            value={props.selection.fixtureId}
+            onChange={(event) =>
+              props.onChange({
+                ...props.selection,
+                fixtureId: event.target.value,
+              })
+            }
+          >
+            <option value="">Select fixture</option>
+            {props.fixtures.map((item) => (
+              <option
+                key={item.fixture.id}
+                value={item.fixture.id}
+                disabled={props.selectedFixtureIds.includes(item.fixture.id)}
+              >
+                {formatFixtureDateTime(item.fixture.kickoffAt)} |{' '}
+                {item.homeTeam.name} vs {item.awayTeam.name} |{' '}
+                {item.competition?.name ?? 'No competition'} |{' '}
+                {item.fixture.status}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm text-slate-300">
+          Market
+          <select
+            className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-white"
+            value={props.selection.marketId}
+            onChange={(event) =>
+              props.onChange({
+                ...props.selection,
+                marketId: event.target.value,
+              })
+            }
+          >
+            <option value="">Select market</option>
+            {props.markets.map((market) => (
+              <option key={market.id} value={market.id}>
+                {market.category ? `${market.category} - ` : ''}
+                {market.name} | {market.active ? 'Active' : 'Inactive'} |{' '}
+                {market.autoEvaluable ? 'Automatic' : 'Manual'}
+              </option>
+            ))}
+          </select>
+          {props.markets.length === 0 && (
+            <span className="mt-1 block text-xs text-amber-200">
+              No markets available. Create or activate markets first.
+            </span>
+          )}
+        </label>
+        <TextInput
+          label="Odd"
+          value={props.selection.odd}
+          onChange={(odd) => props.onChange({ ...props.selection, odd })}
+          required
+        />
+      </div>
+    </article>
+  );
+}
+
+function BulletinPreview(props: {
+  draft: BulletinDraft;
+  saved: BulletinDto | null;
+  fixtures: FixtureOption[];
+  markets: Market[];
+  totalOdd: string;
+  potentialReturn: string;
+}) {
+  const code = props.saved?.bulletin.publicCode ?? 'Unsaved';
+  const status = props.saved?.bulletin.status ?? 'PENDING';
+  const selections =
+    props.saved?.selections ??
+    props.draft.selections.map((selection, index) => {
+      const fixture = props.fixtures.find(
+        (item) => item.fixture.id === selection.fixtureId,
+      );
+      const market =
+        props.markets.find((item) => item.id === selection.marketId) ?? null;
+      return {
+        selection: {
+          id: `draft-${index}`,
+          position: index + 1,
+          fixtureId: selection.fixtureId || null,
+          marketId: selection.marketId || null,
+          odd: selection.odd,
+          calculatedStatus: 'PENDING',
+          manualStatus: null,
+        },
+        snapshot: {
+          homeTeamName: fixture?.homeTeam.name ?? 'Home team',
+          awayTeamName: fixture?.awayTeam.name ?? 'Away team',
+          competitionName: fixture?.competition?.name ?? null,
+          marketCode: market?.code ?? '',
+          marketName: market?.name ?? 'Market',
+          kickoffAt: fixture?.fixture.kickoffAt ?? null,
+        },
+        fixture: fixture ?? null,
+        market,
+        effectiveStatus: 'PENDING',
+      };
+    });
+
+  return (
+    <aside className="grid content-start gap-3 rounded border border-white/10 bg-black/30 p-4">
+      <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
+        <div>
+          {props.draft.renderConfig.showBulletinCode && (
+            <p className="text-sm text-studio-lime">{code}</p>
+          )}
+          <h3 className="text-xl font-bold">
+            {props.draft.type} | {props.draft.mode}
+          </h3>
+        </div>
+        <span className="rounded border border-white/10 px-3 py-1 text-sm">
+          {status}
+        </span>
+      </div>
+      <div className="grid gap-2">
+        {selections.map((item) => (
+          <article
+            key={item.selection.id}
+            className="grid gap-2 rounded border border-white/10 bg-studio-panel p-3"
+          >
+            <div className="flex justify-between gap-3 text-sm text-slate-400">
+              {props.draft.renderConfig.showCompetition && (
+                <span>{item.snapshot.competitionName ?? 'No competition'}</span>
+              )}
+              {props.draft.renderConfig.showResult && (
+                <span>{item.effectiveStatus}</span>
+              )}
+            </div>
+            <p className="font-semibold">
+              {item.snapshot.homeTeamName} vs {item.snapshot.awayTeamName}
+            </p>
+            <p className="text-sm text-slate-300">{item.snapshot.marketName}</p>
+            <div className="flex justify-between gap-3 text-sm">
+              <span>Odd {item.selection.odd}</span>
+              {props.draft.renderConfig.showDate && item.snapshot.kickoffAt && (
+                <span>
+                  {new Date(item.snapshot.kickoffAt).toLocaleDateString()}
+                </span>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
+      <div className="flex justify-between border-t border-white/10 pt-3 text-sm">
+        {props.draft.renderConfig.showStake && (
+          <span>Stake {props.draft.stake || '-'}</span>
+        )}
+        <div className="text-right">
+          {props.draft.renderConfig.showTotalOdd && (
+            <strong className="block">Total odd {props.totalOdd}</strong>
+          )}
+          {props.draft.renderConfig.showStake && (
+            <span className="block text-slate-300">
+              Potential return {props.potentialReturn}
+            </span>
+          )}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function fromBulletin(input: BulletinDto): BulletinDraft {
+  return {
+    id: input.bulletin.id,
+    type: input.bulletin.type,
+    mode: input.bulletin.mode,
+    stake: input.bulletin.stake ?? '',
+    renderConfig: {
+      ...defaultDraft.renderConfig,
+      ...input.bulletin.renderConfig,
+    },
+    selections: input.selections.map((item) => ({
+      id: item.selection.id,
+      fixtureId: item.selection.fixtureId ?? '',
+      marketId: item.selection.marketId ?? '',
+      odd: item.selection.odd,
+    })),
+  };
+}
+
+function calculateDraftTotalOdd(
+  type: BulletinDraft['type'],
+  selections: DraftSelection[],
+) {
+  const values = selections.map((selection) =>
+    Number(selection.odd.replace(',', '.')),
+  );
+  if (values.some((value) => !Number.isFinite(value) || value <= 0)) return '-';
+  if (type === 'SINGLE') return values[0]?.toFixed(2) ?? '-';
+  return values.reduce((total, value) => total * value, 1).toFixed(2);
+}
+
+function calculateDraftPotentialReturn(
+  stake: string,
+  totalOdd: string,
+): string {
+  const stakeValue = Number(stake.replace(',', '.'));
+  const oddValue = Number(totalOdd);
+  if (
+    !Number.isFinite(stakeValue) ||
+    stakeValue <= 0 ||
+    !Number.isFinite(oddValue) ||
+    oddValue <= 0
+  ) {
+    return '-';
+  }
+  return (stakeValue * oddValue).toFixed(2);
+}
+
+function findDuplicateFixtureId(selections: DraftSelection[]): string | null {
+  const seen = new Set<string>();
+  for (const selection of selections) {
+    if (!selection.fixtureId) continue;
+    if (seen.has(selection.fixtureId)) return selection.fixtureId;
+    seen.add(selection.fixtureId);
+  }
+  return null;
+}
+
+function assignFixtureToDraftSelections(
+  draft: BulletinDraft,
+  fixture: FixtureOption,
+): DraftSelection[] {
+  const selections = [...draft.selections];
+  const emptyIndex = selections.findIndex((selection) => !selection.fixtureId);
+  const targetIndex =
+    emptyIndex >= 0
+      ? emptyIndex
+      : draft.type === 'SINGLE'
+        ? 0
+        : selections.length < 10
+          ? selections.length
+          : -1;
+
+  if (targetIndex === -1) return selections;
+
+  const current = selections[targetIndex] ?? {
+    fixtureId: '',
+    marketId: '',
+    odd: '1.50',
+  };
+  selections[targetIndex] = {
+    ...current,
+    fixtureId: fixture.fixture.id,
+  };
+
+  return selections;
+}
+
+function formatFixtureDateTime(value: string | null): string {
+  if (!value) return 'No date';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Invalid date';
+  return date.toLocaleString(undefined, {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
 }
 
 function CompetitionsPanel() {

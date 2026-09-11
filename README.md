@@ -12,6 +12,9 @@ Instead of relying on manually edited graphics or AI-generated layouts, Bet Stud
 
 Bet Studio is currently under active development.
 
+The local Bulletin Builder workflow is implemented for creating, editing,
+duplicating and previewing structured SINGLE and MULTI bulletins.
+
 The initial scope includes:
 
 - Local-first operation.

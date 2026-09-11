@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import { BulletinService } from '../../application/bulletins/bulletin-service.js';
 import {
   CatalogService,
   listQuerySchema,
@@ -13,6 +14,7 @@ import {
 } from '../../shared/errors.js';
 
 export function buildApiApp(options?: {
+  bulletinService?: BulletinService;
   catalogService?: CatalogService;
   settlementService?: SettlementService;
   synchronizationService?: SynchronizationService;
@@ -24,6 +26,53 @@ export function buildApiApp(options?: {
   app.get('/api/health', () => {
     return { status: 'ok' };
   });
+
+  if (options?.bulletinService) {
+    const bulletins = options.bulletinService;
+
+    app.get('/api/bulletins', () => bulletins.listBulletins());
+    app.post('/api/bulletins', (request, reply) =>
+      reply.code(201).send(bulletins.createBulletin(request.body)),
+    );
+    app.get('/api/bulletins/:id', (request) =>
+      bulletins.getBulletin((request.params as { id: string }).id),
+    );
+    app.patch('/api/bulletins/:id', (request) =>
+      bulletins.updateBulletin(
+        (request.params as { id: string }).id,
+        request.body,
+      ),
+    );
+    app.post('/api/bulletins/:id/duplicate', (request, reply) =>
+      reply
+        .code(201)
+        .send(
+          bulletins.duplicateBulletin((request.params as { id: string }).id),
+        ),
+    );
+    app.get('/api/builder/fixtures', (request) => {
+      const query = request.query as { search?: string; limit?: string };
+      return bulletins.listFixtures({
+        search: query.search,
+        limit: query.limit ? Number(query.limit) : undefined,
+      });
+    });
+    app.post('/api/builder/fixtures', (request, reply) =>
+      reply.code(201).send(bulletins.createFixture(request.body)),
+    );
+    app.get('/api/builder/markets', (request) => {
+      const query = request.query as {
+        search?: string;
+        activeOnly?: string;
+        limit?: string;
+      };
+      return bulletins.listMarkets({
+        search: query.search,
+        activeOnly: query.activeOnly !== 'false',
+        limit: query.limit ? Number(query.limit) : undefined,
+      });
+    });
+  }
 
   if (options?.catalogService) {
     const catalog = options.catalogService;

@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { describe, expect, it } from 'vitest';
+import type { BulletinService } from '../../application/bulletins/bulletin-service.js';
 import { CatalogService } from '../../application/catalog/catalog-service.js';
 import type { SettlementService } from '../../application/settlement/settlement-service.js';
 import { SynchronizationService } from '../../application/synchronization/synchronization-service.js';
@@ -148,6 +149,131 @@ describe('Bet Studio catalog API', () => {
     } finally {
       await app.close();
       database.cleanup();
+    }
+  });
+});
+
+describe('Bet Studio bulletin API', () => {
+  it('lists, creates, reads, updates and duplicates bulletins', async () => {
+    const calls: string[] = [];
+    const bulletinResponse = {
+      bulletin: {
+        id: 'bulletin-1',
+        publicCode: 'BET #0001',
+        type: 'SINGLE',
+        mode: 'PRE_MATCH',
+        status: 'PENDING',
+        stake: null,
+        totalOdd: '1.50',
+        renderConfig: {},
+      },
+      selections: [],
+    };
+    const app = buildApiApp({
+      bulletinService: {
+        listBulletins: () => ({
+          items: [
+            {
+              id: 'bulletin-1',
+              publicCode: 'BET #0001',
+              type: 'SINGLE',
+              mode: 'PRE_MATCH',
+              status: 'PENDING',
+              totalOdd: '1.50',
+              selectionCount: 1,
+              updatedAt: '2026-09-11T00:00:00.000Z',
+            },
+          ],
+        }),
+        createBulletin: (input: unknown) => {
+          calls.push(`create:${JSON.stringify(input)}`);
+          return bulletinResponse;
+        },
+        getBulletin: (id: string) => {
+          calls.push(`get:${id}`);
+          return bulletinResponse;
+        },
+        updateBulletin: (id: string, input: unknown) => {
+          calls.push(`update:${id}:${JSON.stringify(input)}`);
+          return bulletinResponse;
+        },
+        duplicateBulletin: (id: string) => {
+          calls.push(`duplicate:${id}`);
+          return {
+            ...bulletinResponse,
+            bulletin: {
+              ...bulletinResponse.bulletin,
+              id: 'bulletin-2',
+              publicCode: 'BET #0002',
+            },
+          };
+        },
+        createFixture: (input: unknown) => {
+          calls.push(`fixture:${JSON.stringify(input)}`);
+          return { fixture: { id: 'fixture-1' } };
+        },
+        listFixtures: () => ({ items: [] }),
+        listMarkets: () => ({ items: [] }),
+      } as unknown as BulletinService,
+    });
+
+    try {
+      expect(
+        (await app.inject({ method: 'GET', url: '/api/bulletins' })).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: '/api/bulletins',
+            payload: { type: 'SINGLE', mode: 'PRE_MATCH', selections: [] },
+          })
+        ).statusCode,
+      ).toBe(201);
+      expect(
+        (
+          await app.inject({
+            method: 'GET',
+            url: '/api/bulletins/bulletin-1',
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await app.inject({
+            method: 'PATCH',
+            url: '/api/bulletins/bulletin-1',
+            payload: { type: 'MULTI', mode: 'LIVE', selections: [] },
+          })
+        ).statusCode,
+      ).toBe(200);
+      const duplicate = await app.inject({
+        method: 'POST',
+        url: '/api/bulletins/bulletin-1/duplicate',
+      });
+      expect(duplicate.statusCode).toBe(201);
+      expect(
+        duplicate.json<{ bulletin: { publicCode: string } }>().bulletin
+          .publicCode,
+      ).toBe('BET #0002');
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: '/api/builder/fixtures',
+            payload: { homeTeamId: 'team-1', awayTeamId: 'team-2' },
+          })
+        ).statusCode,
+      ).toBe(201);
+      expect(calls).toEqual([
+        'create:{"type":"SINGLE","mode":"PRE_MATCH","selections":[]}',
+        'get:bulletin-1',
+        'update:bulletin-1:{"type":"MULTI","mode":"LIVE","selections":[]}',
+        'duplicate:bulletin-1',
+        'fixture:{"homeTeamId":"team-1","awayTeamId":"team-2"}',
+      ]);
+    } finally {
+      await app.close();
     }
   });
 });

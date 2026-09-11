@@ -1,3 +1,4 @@
+import { BulletinService } from '../../application/bulletins/bulletin-service.js';
 import { buildApiApp } from './app.js';
 import { loadServerEnv } from '../../shared/config/server-env.js';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
@@ -6,6 +7,7 @@ import { SettlementService } from '../../application/settlement/settlement-servi
 import { SynchronizationService } from '../../application/synchronization/synchronization-service.js';
 import { openDatabase } from '../../infrastructure/database/connection.js';
 import { DrizzleBulletinRepository } from '../../infrastructure/database/repositories/bulletin-repository.js';
+import { DrizzleBulletinBuilderRepository } from '../../infrastructure/database/repositories/bulletin-builder-repository.js';
 import { DrizzleCatalogRepository } from '../../infrastructure/database/repositories/catalog-repository.js';
 import { DrizzleFixtureRepository } from '../../infrastructure/database/repositories/fixture-repository.js';
 import { DrizzleMarketRepository } from '../../infrastructure/database/repositories/market-repository.js';
@@ -26,6 +28,9 @@ const goalApiProvider = env.GOAL_API_KEY
     )
   : null;
 const app = buildApiApp({
+  bulletinService: new BulletinService(
+    new DrizzleBulletinBuilderRepository(database.db),
+  ),
   catalogService: new CatalogService(new DrizzleCatalogRepository(database.db)),
   settlementService: new SettlementService(
     new DrizzleBulletinRepository(database.db),

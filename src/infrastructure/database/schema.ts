@@ -341,9 +341,6 @@ export const bulletinSelections = sqliteTable(
     ...timestamps,
   },
   (table) => ({
-    bulletinPositionUnique: uniqueIndex(
-      'bulletin_selections_bulletin_position_unique',
-    ).on(table.bulletinId, table.position),
     bulletinIdx: index('bulletin_selections_bulletin_id_idx').on(
       table.bulletinId,
     ),
