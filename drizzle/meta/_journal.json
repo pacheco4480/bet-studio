@@ -15,6 +15,13 @@
       "when": 1789138100000,
       "tag": "0001_reorder_bulletin_selections",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789143900000,
+      "tag": "0002_render_record_metadata",
+      "breakpoints": true
     }
   ]
 }

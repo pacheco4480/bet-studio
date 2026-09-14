@@ -19,6 +19,20 @@ The renderer must consume structured render data and a specific template version
 
 Detailed persistence rules belong to `data-model.md`.
 
+Phase 07 implements the first production renderer as:
+
+- `FEED` only, exactly `1080 × 1350`.
+- Dedicated `BulletinRenderModel` mapped from persisted bulletin snapshots.
+- Declarative `BETSTUDIO_FEED` template version `1`.
+- Renderer version `1`.
+- HTML/CSS fixed canvas exported through Playwright Chromium.
+- Canonical SHA-256 fingerprint over render model, template, renderer version,
+  format, canvas, locale and timezone.
+- PNG files stored in the controlled local `exports/renders/` directory.
+- Successful exports persisted as `RenderRecord` metadata.
+
+Story export remains deferred.
+
 ---
 
 ## 2. Core Principles

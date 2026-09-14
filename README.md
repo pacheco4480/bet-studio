@@ -125,6 +125,11 @@ The same render input and template version should produce the same layout.
 
 Production rendering does not depend on generative AI.
 
+Current FEED export uses a dedicated persisted render model, the
+`BETSTUDIO_FEED` v1 template, renderer version `1`, and Playwright Chromium to
+export an exact `1080 × 1350` PNG. Successful exports are written under
+`exports/renders/` and tracked with a render fingerprint in `render_records`.
+
 ---
 
 ### Market Engine

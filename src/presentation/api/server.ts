@@ -11,9 +11,12 @@ import { DrizzleBulletinBuilderRepository } from '../../infrastructure/database/
 import { DrizzleCatalogRepository } from '../../infrastructure/database/repositories/catalog-repository.js';
 import { DrizzleFixtureRepository } from '../../infrastructure/database/repositories/fixture-repository.js';
 import { DrizzleMarketRepository } from '../../infrastructure/database/repositories/market-repository.js';
+import { DrizzleRenderRecordRepository } from '../../infrastructure/database/repositories/render-record-repository.js';
 import { DrizzleSyncRepository } from '../../infrastructure/database/repositories/sync-repository.js';
+import { HtmlFeedRenderer } from '../../infrastructure/rendering/html-feed-renderer.js';
 import { GoalApiProvider } from '../../infrastructure/providers/goal-api/goal-api-provider.js';
 import { FetchJsonHttpClient } from '../../infrastructure/providers/http-client.js';
+import { RenderingService } from '../../application/rendering/rendering-service.js';
 
 const env = loadServerEnv();
 const database = openDatabase(env.BET_STUDIO_DB_PATH);
@@ -27,9 +30,14 @@ const goalApiProvider = env.GOAL_API_KEY
       }),
     )
   : null;
+const bulletinRepository = new DrizzleBulletinBuilderRepository(database.db);
 const app = buildApiApp({
-  bulletinService: new BulletinService(
-    new DrizzleBulletinBuilderRepository(database.db),
+  bulletinService: new BulletinService(bulletinRepository),
+  renderingService: new RenderingService(
+    bulletinRepository,
+    new DrizzleRenderRecordRepository(database.db),
+    new HtmlFeedRenderer(),
+    'exports/renders',
   ),
   catalogService: new CatalogService(new DrizzleCatalogRepository(database.db)),
   settlementService: new SettlementService(

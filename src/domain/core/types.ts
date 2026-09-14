@@ -251,6 +251,12 @@ export type RenderRecord = {
   templateVersion: number;
   outputFormat: RenderOutputFormat;
   filePath: string;
+  fileName: string | null;
+  width: number | null;
+  height: number | null;
+  rendererVersion: string | null;
+  fingerprint: string | null;
+  renderInputHash: string | null;
   createdAt: UtcDateString;
 };
 

@@ -29,3 +29,7 @@ export class ProviderUnavailableError extends ProviderError {
 export class ProviderValidationError extends ProviderError {
   override readonly code = 'PROVIDER_VALIDATION_ERROR';
 }
+
+export class RenderingError extends Error {
+  readonly code = 'RENDERING_ERROR';
+}

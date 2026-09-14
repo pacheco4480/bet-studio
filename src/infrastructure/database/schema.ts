@@ -428,6 +428,12 @@ export const renderRecords = sqliteTable(
     templateVersion: integer('template_version').notNull(),
     outputFormat: text('output_format').notNull(),
     filePath: text('file_path').notNull(),
+    fileName: text('file_name'),
+    width: integer('width'),
+    height: integer('height'),
+    rendererVersion: text('renderer_version'),
+    fingerprint: text('fingerprint'),
+    renderInputHash: text('render_input_hash'),
     createdAt: text('created_at').notNull(),
   },
   (table) => ({

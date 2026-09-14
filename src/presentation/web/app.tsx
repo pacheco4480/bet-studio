@@ -92,6 +92,17 @@ type BulletinListItem = {
   updatedAt: string;
 };
 
+type RenderResult = {
+  renderId: string;
+  bulletinId: string;
+  fingerprint: string;
+  format: 'FEED';
+  width: number;
+  height: number;
+  fileName: string;
+  downloadUrl: string;
+};
+
 type ProviderStatus = {
   code: string;
   displayName: string;
@@ -294,6 +305,8 @@ function BulletinsPanel() {
   const [draft, setDraft] = useState<BulletinDraft>(defaultDraft);
   const [saved, setSaved] = useState<BulletinDto | null>(null);
   const [saveState, setSaveState] = useState('Unsaved');
+  const [renderState, setRenderState] = useState('No export yet');
+  const [lastRender, setLastRender] = useState<RenderResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -378,6 +391,7 @@ function BulletinsPanel() {
     setSaved(result);
     setDraft(fromBulletin(result));
     setSaveState(`Opened ${result.bulletin.publicCode}`);
+    clearRenderState();
   }
 
   async function duplicateBulletin() {
@@ -389,7 +403,31 @@ function BulletinsPanel() {
     setSaved(result);
     setDraft(fromBulletin(result));
     setSaveState(`Duplicated as ${result.bulletin.publicCode}`);
+    clearRenderState();
     await load();
+  }
+
+  function clearRenderState() {
+    setRenderState('No export yet');
+    setLastRender(null);
+  }
+
+  async function renderSavedBulletin() {
+    if (!draft.id) {
+      setError('Save the bulletin before exporting PNG');
+      return;
+    }
+    setError(null);
+    setRenderState('Rendering');
+    const result = await request<RenderResult>(
+      `/api/bulletins/${draft.id}/render`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ format: 'FEED' }),
+      },
+    );
+    setLastRender(result);
+    setRenderState(`Rendered ${result.fileName}`);
   }
 
   return (
@@ -580,16 +618,39 @@ function BulletinsPanel() {
         </button>
         <button
           type="button"
+          disabled={!draft.id || renderState === 'Rendering'}
+          className="rounded border border-studio-lime px-4 py-2 font-semibold text-studio-lime disabled:cursor-not-allowed disabled:border-white/10 disabled:text-slate-500"
+          onClick={() =>
+            void renderSavedBulletin().catch((err: Error) => {
+              setError(err.message);
+              setRenderState('Render error');
+            })
+          }
+        >
+          Export PNG
+        </button>
+        <button
+          type="button"
           className="rounded border border-white/10 px-4 py-2 font-semibold text-slate-200"
           onClick={() => {
             setDraft(defaultDraft);
             setSaved(null);
             setSaveState('Unsaved');
+            clearRenderState();
           }}
         >
           New
         </button>
         <span className="text-sm text-slate-400">{saveState}</span>
+        <span className="text-sm text-slate-400">{renderState}</span>
+        {lastRender && (
+          <a
+            className="text-sm font-semibold text-studio-lime underline"
+            href={lastRender.downloadUrl}
+          >
+            Download PNG
+          </a>
+        )}
       </section>
       <section className="grid gap-3">
         <h3 className="text-lg font-semibold">Saved bulletins</h3>

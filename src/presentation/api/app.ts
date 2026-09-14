@@ -1,5 +1,7 @@
 import Fastify from 'fastify';
+import { readFile } from 'node:fs/promises';
 import { BulletinService } from '../../application/bulletins/bulletin-service.js';
+import type { RenderingService } from '../../application/rendering/rendering-service.js';
 import {
   CatalogService,
   listQuerySchema,
@@ -10,12 +12,14 @@ import {
   ConflictError,
   NotFoundError,
   ProviderError,
+  RenderingError,
   ValidationError,
 } from '../../shared/errors.js';
 
 export function buildApiApp(options?: {
   bulletinService?: BulletinService;
   catalogService?: CatalogService;
+  renderingService?: RenderingService;
   settlementService?: SettlementService;
   synchronizationService?: SynchronizationService;
 }) {
@@ -71,6 +75,35 @@ export function buildApiApp(options?: {
         activeOnly: query.activeOnly !== 'false',
         limit: query.limit ? Number(query.limit) : undefined,
       });
+    });
+  }
+
+  if (options?.renderingService) {
+    const rendering = options.renderingService;
+
+    app.post('/api/bulletins/:id/render', async (request, reply) => {
+      const body = (request.body ?? {}) as { format?: 'FEED' | 'STORY' };
+      return reply
+        .code(201)
+        .send(
+          await rendering.renderBulletin(
+            (request.params as { id: string }).id,
+            body,
+          ),
+        );
+    });
+    app.get('/api/renders/:id/download', async (request, reply) => {
+      const record = rendering.getRenderRecord(
+        (request.params as { id: string }).id,
+      );
+      const png = await readFile(record.filePath);
+      return reply
+        .header('content-type', 'image/png')
+        .header(
+          'content-disposition',
+          `attachment; filename="${record.fileName ?? 'bet-studio-render.png'}"`,
+        )
+        .send(png);
     });
   }
 
@@ -236,6 +269,11 @@ export function buildApiApp(options?: {
         .code(409)
         .send({ error: error.code, message: error.message });
     if (error instanceof ProviderError) {
+      return reply
+        .code(503)
+        .send({ error: error.code, message: error.message });
+    }
+    if (error instanceof RenderingError) {
       return reply
         .code(503)
         .send({ error: error.code, message: error.message });
