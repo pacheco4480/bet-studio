@@ -8,9 +8,11 @@ export default defineConfig({
     trace: 'on-first-retry',
   },
   webServer: {
-    command: 'npm run dev:web',
+    command:
+      'npx concurrently -k -s first "npx tsx src/presentation/api/server.ts" "npx vite"',
     url: 'http://localhost:5173',
     reuseExistingServer: !process.env.CI,
+    gracefulShutdown: { signal: 'SIGINT', timeout: 1000 },
   },
   projects: [
     {

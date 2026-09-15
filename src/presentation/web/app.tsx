@@ -214,6 +214,8 @@ type BulletinEvaluationResult = {
   selections: EvaluatedSelection[];
 };
 
+type SettlementStatus = 'PENDING' | 'GREEN' | 'RED' | 'VOID' | 'MANUAL';
+
 type Tab =
   | 'bulletins'
   | 'history'
@@ -642,6 +644,12 @@ function BulletinsPanel(props: {
       />
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="grid gap-3">
+          <div className="flex items-center justify-between gap-3 text-sm text-slate-400">
+            <span>{draft.selections.length} of 10 selections configured</span>
+            {draft.type === 'SINGLE' && (
+              <span>SINGLE bulletins use exactly one selection.</span>
+            )}
+          </div>
           {draft.selections.map((selection, index) => (
             <SelectionEditor
               key={selection.id ?? index}
@@ -685,6 +693,11 @@ function BulletinsPanel(props: {
           <button
             type="button"
             disabled={!canAdd}
+            title={
+              canAdd
+                ? 'Add another selection to this bulletin.'
+                : 'MULTI bulletins support up to 10 selections. SINGLE bulletins support one selection.'
+            }
             className="rounded border border-studio-lime px-4 py-2 font-semibold text-studio-lime disabled:cursor-not-allowed disabled:border-white/10 disabled:text-slate-500"
             onClick={() => {
               setDraft({
@@ -761,8 +774,12 @@ function BulletinsPanel(props: {
         >
           New
         </button>
-        <span className="text-sm text-slate-400">{saveState}</span>
-        <span className="text-sm text-slate-400">{renderState}</span>
+        <span className="text-sm text-slate-400" aria-live="polite">
+          {saveState}
+        </span>
+        <span className="text-sm text-slate-400" aria-live="polite">
+          {renderState}
+        </span>
         {lastRender && (
           <a
             className="text-sm font-semibold text-studio-lime underline"
@@ -786,7 +803,8 @@ function BulletinsPanel(props: {
               <h4 className="font-semibold">{item.publicCode}</h4>
               <p className="text-sm text-slate-400">
                 {item.type} | {item.mode} | {item.selectionCount} selections |{' '}
-                {item.status} | {item.totalOdd ?? 'No odd'}
+                <StatusBadge status={item.status} /> |{' '}
+                {item.totalOdd ?? 'No odd'}
               </p>
             </div>
             <button
@@ -1124,9 +1142,7 @@ function BulletinPreview(props: {
             {props.draft.type} | {props.draft.mode}
           </h3>
         </div>
-        <span className="rounded border border-white/10 px-3 py-1 text-sm">
-          {status}
-        </span>
+        <StatusBadge status={status} />
       </div>
       <div className="grid gap-2">
         {selections.map((item) => (
@@ -1482,8 +1498,16 @@ function HistoryPanel(props: { onEdit: (id: string) => void }) {
               </div>
             </div>
 
-            {action && <p className="text-sm text-slate-300">{action}...</p>}
-            {message && <p className="text-sm text-studio-lime">{message}</p>}
+            {action && (
+              <p className="text-sm text-slate-300" aria-live="polite">
+                {action}...
+              </p>
+            )}
+            {message && (
+              <p className="text-sm text-studio-lime" aria-live="polite">
+                {message}
+              </p>
+            )}
 
             <div className="grid gap-3">
               {detail.selections.map((item) => (
@@ -1633,7 +1657,9 @@ function HistorySelectionCard(props: {
             )}
         </div>
         <div className="grid gap-1 text-sm">
-          <span>Calculated: {props.item.calculatedStatus}</span>
+          <span>
+            Calculated: <StatusBadge status={props.item.calculatedStatus} />
+          </span>
           <span>Manual: {props.item.manualStatus ?? '-'}</span>
           <span>
             Effective: <StatusBadge status={props.item.effectiveStatus} />
@@ -1846,8 +1872,22 @@ function SelectInput(props: {
 }
 
 function StatusBadge(props: { status: string }) {
+  const classes: Record<SettlementStatus, string> = {
+    PENDING: 'border-slate-500/60 bg-slate-800 text-slate-100',
+    GREEN: 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200',
+    RED: 'border-rose-400/50 bg-rose-500/15 text-rose-200',
+    VOID: 'border-sky-400/50 bg-sky-500/15 text-sky-200',
+    MANUAL: 'border-amber-300/50 bg-amber-400/15 text-amber-100',
+  };
+  const statusClass =
+    props.status in classes
+      ? classes[props.status as SettlementStatus]
+      : 'border-white/10 bg-black/20 text-slate-100';
+
   return (
-    <span className="inline-flex rounded border border-white/10 px-2 py-1 text-xs font-semibold">
+    <span
+      className={`inline-flex rounded border px-2 py-1 text-xs font-semibold ${statusClass}`}
+    >
       {props.status}
     </span>
   );
