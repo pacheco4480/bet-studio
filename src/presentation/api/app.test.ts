@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BulletinService } from '../../application/bulletins/bulletin-service.js';
 import { CatalogService } from '../../application/catalog/catalog-service.js';
+import type { HistoryService } from '../../application/history/history-service.js';
 import type { SettlementService } from '../../application/settlement/settlement-service.js';
 import { SynchronizationService } from '../../application/synchronization/synchronization-service.js';
 import { DrizzleCatalogRepository } from '../../infrastructure/database/repositories/catalog-repository.js';
@@ -440,6 +441,67 @@ describe('Bet Studio settlement API', () => {
         'bulletin:bulletin-1',
         'override:selection-1:{"status":"VOID","reason":"Manual review"}',
         'reset:selection-1',
+      ]);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('Bet Studio history API', () => {
+  it('lists history, loads detail and updates fixture results', async () => {
+    const calls: string[] = [];
+    const app = buildApiApp({
+      historyService: {
+        listBulletins: (query: unknown) => {
+          calls.push(`list:${JSON.stringify(query)}`);
+          return { items: [] };
+        },
+        getBulletin: (id: string) => {
+          calls.push(`detail:${id}`);
+          return {
+            bulletin: { id, publicCode: 'BET #0001' },
+            selections: [],
+            renders: [],
+          };
+        },
+        updateFixtureResult: (id: string, input: unknown) => {
+          calls.push(`fixture:${id}:${JSON.stringify(input)}`);
+          return { status: 'FINISHED', homeScore: 2, awayScore: 1 };
+        },
+      } as unknown as HistoryService,
+    });
+
+    try {
+      expect(
+        (
+          await app.inject({
+            method: 'GET',
+            url: '/api/history/bulletins?search=0001&status=GREEN',
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await app.inject({
+            method: 'GET',
+            url: '/api/history/bulletins/bulletin-1',
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        (
+          await app.inject({
+            method: 'PATCH',
+            url: '/api/fixtures/fixture-1/result',
+            payload: { status: 'FINISHED', homeScore: 2, awayScore: 1 },
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(calls).toEqual([
+        'list:{"search":"0001","status":"GREEN"}',
+        'detail:bulletin-1',
+        'fixture:fixture-1:{"status":"FINISHED","homeScore":2,"awayScore":1}',
       ]);
     } finally {
       await app.close();

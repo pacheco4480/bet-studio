@@ -25,6 +25,7 @@ import {
   type TestDatabase,
 } from '../../infrastructure/database/test-utils.js';
 import {
+  selectionResultSnapshotEvents,
   templates,
   templateVersions,
 } from '../../infrastructure/database/schema.js';
@@ -108,6 +109,9 @@ describe('SettlementService', () => {
     expect(
       harness.bulletins.findById(scenario.bulletin.id)?.bulletin.status,
     ).toBe('GREEN');
+    expect(
+      harness.db.select().from(selectionResultSnapshotEvents).all(),
+    ).toHaveLength(1);
   });
 
   it('re-evaluates all selections in a bulletin after a fixture score correction', () => {

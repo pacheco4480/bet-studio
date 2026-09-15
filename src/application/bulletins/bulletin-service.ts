@@ -11,6 +11,7 @@ import type {
   Competition,
   Fixture,
   Market,
+  SelectionResultSnapshot,
   Team,
 } from '../../domain/core/types.js';
 import {
@@ -45,6 +46,7 @@ export type BulletinAggregateDto = {
     snapshot: BulletinSelectionSnapshot;
     fixture: FixtureOption | null;
     market: Market | null;
+    resultSnapshot?: SelectionResultSnapshot;
     effectiveStatus: BulletinStatus;
   }>;
 };
@@ -72,7 +74,11 @@ export type BulletinRepository = {
   saveReplacingAggregate(aggregate: BulletinAggregateDto): void;
   getFixtureContext(id: FixtureId): FixtureOption | null;
   getMarket(id: MarketId): Market | null;
-  listFixtures(input: { search?: string; limit: number }): FixtureOption[];
+  listFixtures(input: {
+    search?: string;
+    limit: number;
+    upcomingOnly?: boolean;
+  }): FixtureOption[];
   listMarkets(input: {
     search?: string;
     activeOnly: boolean;
@@ -149,11 +155,16 @@ export class BulletinService {
     return aggregate;
   }
 
-  listFixtures(query: { search?: string; limit?: number }) {
+  listFixtures(query: {
+    search?: string;
+    limit?: number;
+    upcomingOnly?: boolean;
+  }) {
     return {
       items: this.repository.listFixtures({
         search: query.search,
         limit: query.limit ?? 50,
+        upcomingOnly: query.upcomingOnly ?? true,
       }),
     };
   }

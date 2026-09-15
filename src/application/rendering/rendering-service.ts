@@ -170,9 +170,15 @@ function mapBulletinToRenderModel(
       const kickoff = splitKickoff(item.snapshot.kickoffAt, template);
       const fixture = item.fixture?.fixture ?? null;
       const resultText =
-        fixture?.homeScore !== null && fixture?.awayScore !== null && fixture
-          ? `${fixture.homeScore}-${fixture.awayScore}`
-          : null;
+        item.resultSnapshot?.homeScore !== null &&
+        item.resultSnapshot?.awayScore !== null &&
+        item.resultSnapshot
+          ? `${item.resultSnapshot.homeScore}-${item.resultSnapshot.awayScore}`
+          : fixture?.homeScore !== null &&
+              fixture?.awayScore !== null &&
+              fixture
+            ? `${fixture.homeScore}-${fixture.awayScore}`
+            : null;
       return {
         position: item.selection.position,
         homeTeam: {

@@ -1,4 +1,5 @@
 import { BulletinService } from '../../application/bulletins/bulletin-service.js';
+import { HistoryService } from '../../application/history/history-service.js';
 import { buildApiApp } from './app.js';
 import { loadServerEnv } from '../../shared/config/server-env.js';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
@@ -10,6 +11,7 @@ import { DrizzleBulletinRepository } from '../../infrastructure/database/reposit
 import { DrizzleBulletinBuilderRepository } from '../../infrastructure/database/repositories/bulletin-builder-repository.js';
 import { DrizzleCatalogRepository } from '../../infrastructure/database/repositories/catalog-repository.js';
 import { DrizzleFixtureRepository } from '../../infrastructure/database/repositories/fixture-repository.js';
+import { DrizzleHistoryRepository } from '../../infrastructure/database/repositories/history-repository.js';
 import { DrizzleMarketRepository } from '../../infrastructure/database/repositories/market-repository.js';
 import { DrizzleRenderRecordRepository } from '../../infrastructure/database/repositories/render-record-repository.js';
 import { DrizzleSyncRepository } from '../../infrastructure/database/repositories/sync-repository.js';
@@ -33,6 +35,7 @@ const goalApiProvider = env.GOAL_API_KEY
 const bulletinRepository = new DrizzleBulletinBuilderRepository(database.db);
 const app = buildApiApp({
   bulletinService: new BulletinService(bulletinRepository),
+  historyService: new HistoryService(new DrizzleHistoryRepository(database.db)),
   renderingService: new RenderingService(
     bulletinRepository,
     new DrizzleRenderRecordRepository(database.db),

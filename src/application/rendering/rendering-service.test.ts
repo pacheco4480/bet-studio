@@ -16,6 +16,7 @@ import { DrizzleCompetitionRepository } from '../../infrastructure/database/repo
 import { DrizzleFixtureRepository } from '../../infrastructure/database/repositories/fixture-repository.js';
 import { DrizzleMarketRepository } from '../../infrastructure/database/repositories/market-repository.js';
 import { DrizzleTeamRepository } from '../../infrastructure/database/repositories/team-repository.js';
+import { selectionResultSnapshots } from '../../infrastructure/database/schema.js';
 import {
   createMigratedTestDatabase,
   type TestDatabase,
@@ -24,7 +25,12 @@ import { BulletinService } from '../bulletins/bulletin-service.js';
 import { betStudioFeedTemplateV1 } from './feed-template.js';
 import { stableHash } from './fingerprint.js';
 import { createRenderPlan } from './layout.js';
-import { FEED_HEIGHT, FEED_WIDTH, type RenderExport } from './render-model.js';
+import {
+  FEED_HEIGHT,
+  FEED_WIDTH,
+  type BulletinRenderModel,
+  type RenderExport,
+} from './render-model.js';
 import { RenderingService } from './rendering-service.js';
 
 let database: TestDatabase | null = null;
@@ -143,13 +149,64 @@ describe('rendering', () => {
       height: FEED_HEIGHT,
     });
   });
+
+  it('renders saved result snapshots for historical bulletins', async () => {
+    database = createMigratedTestDatabase();
+    const bulletinRepository = new DrizzleBulletinBuilderRepository(
+      database.db,
+    );
+    const renderer = new FakeRenderer();
+    const service = new RenderingService(
+      bulletinRepository,
+      new MemoryRenderRecordRepository(),
+      renderer,
+      dirname(database.path),
+    );
+    const bulletinService = new BulletinService(bulletinRepository);
+    const seed = seedCatalog(database);
+    const bulletin = bulletinService.createBulletin({
+      type: 'SINGLE',
+      mode: 'PRE_MATCH',
+      selections: [
+        {
+          fixtureId: seed.fixture.id,
+          marketId: seed.market.id,
+          odd: '2.00',
+        },
+      ],
+    });
+    const [selectionItem] = bulletin.selections;
+    const selection = selectionItem.selection;
+    database.db
+      .insert(selectionResultSnapshots)
+      .values({
+        selectionId: selection.id,
+        homeScore: 2,
+        awayScore: 1,
+        fixtureStatus: 'FINISHED',
+        evaluatedAt: '2026-09-11T22:00:00.000Z',
+        evaluationVersion: 'TOTAL_GOALS@1',
+        resultSource: 'PROVIDER',
+        createdAt: nowUtc(),
+        updatedAt: nowUtc(),
+      })
+      .run();
+
+    await service.renderBulletin(bulletin.bulletin.id);
+
+    expect(renderer.lastModel?.selections[0]?.resultText).toBe('2-1');
+  });
 });
 
 class FakeRenderer {
+  lastModel: BulletinRenderModel | null = null;
+
   render(input: {
+    model: BulletinRenderModel;
     fingerprint: string;
     renderInputHash: string;
   }): Promise<RenderExport> {
+    this.lastModel = input.model;
     return Promise.resolve({
       png: createPngHeader(FEED_WIDTH, FEED_HEIGHT),
       width: FEED_WIDTH,
@@ -233,7 +290,7 @@ function seedCatalog(database: TestDatabase) {
   fixtures.save(fixture);
   const market: Market = {
     id: createId<'MarketId'>(),
-    code: 'OVER_2_5',
+    code: 'TEST_RENDER_OVER_2_5',
     name: 'Over 2.5 Goals',
     category: 'Total Goals',
     active: true,

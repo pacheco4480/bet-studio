@@ -1,4 +1,4 @@
-import { and, desc, eq, like, or } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, like, or } from 'drizzle-orm';
 import type {
   BulletinAggregateDto,
   BulletinListItem,
@@ -34,6 +34,7 @@ import {
   competitions,
   fixtures,
   markets,
+  selectionResultSnapshots,
   teams,
   templates,
   templateVersions,
@@ -163,6 +164,14 @@ export class DrizzleBulletinBuilderRepository implements BulletinRepository {
         return {
           selection,
           snapshot,
+          resultSnapshot:
+            (this.db
+              .select()
+              .from(selectionResultSnapshots)
+              .where(eq(selectionResultSnapshots.selectionId, selection.id))
+              .get() as
+              | BulletinAggregateDto['selections'][number]['resultSnapshot']
+              | undefined) ?? undefined,
           fixture: selection.fixtureId
             ? this.getFixtureContext(selection.fixtureId)
             : null,
@@ -265,21 +274,43 @@ export class DrizzleBulletinBuilderRepository implements BulletinRepository {
       .run();
   }
 
-  listFixtures(input: { search?: string; limit: number }): FixtureOption[] {
+  listFixtures(input: {
+    search?: string;
+    limit: number;
+    upcomingOnly?: boolean;
+  }): FixtureOption[] {
     const pattern = input.search?.trim() ? `%${input.search.trim()}%` : null;
+    const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
     const rows = this.db
       .select({ fixture: fixtures })
       .from(fixtures)
       .leftJoin(competitions, eq(competitions.id, fixtures.competitionId))
       .leftJoin(teams, eq(teams.id, fixtures.homeTeamId))
       .where(
-        pattern
-          ? or(
-              like(competitions.name, pattern),
-              like(teams.name, pattern),
-              like(fixtures.status, pattern),
-            )
-          : undefined,
+        and(
+          pattern
+            ? or(
+                like(competitions.name, pattern),
+                like(teams.name, pattern),
+                like(fixtures.status, pattern),
+              )
+            : undefined,
+          input.upcomingOnly
+            ? and(
+                or(
+                  eq(fixtures.status, 'SCHEDULED'),
+                  eq(fixtures.status, 'LIVE'),
+                  eq(fixtures.status, 'POSTPONED'),
+                  eq(fixtures.status, 'UNKNOWN'),
+                ),
+                or(
+                  isNull(fixtures.kickoffAt),
+                  eq(fixtures.kickoffAt, ''),
+                  gte(fixtures.kickoffAt, cutoff),
+                ),
+              )
+            : undefined,
+        ),
       )
       .orderBy(desc(fixtures.kickoffAt))
       .limit(input.limit)

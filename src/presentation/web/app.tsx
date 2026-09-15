@@ -38,6 +38,7 @@ type FixtureOption = {
     homeScore: number | null;
     awayScore: number | null;
     liveMinute: number | null;
+    sourceType?: string;
   };
   homeTeam: Team;
   awayTeam: Team;
@@ -92,6 +93,74 @@ type BulletinListItem = {
   updatedAt: string;
 };
 
+type HistoryRenderSummary = {
+  id: string;
+  fileName: string | null;
+  format: string;
+  templateVersion: number;
+  rendererVersion: string | null;
+  dimensions: string | null;
+  fingerprint: string | null;
+  createdAt: string;
+  downloadUrl: string;
+};
+
+type HistoryListItem = BulletinListItem & {
+  createdAt: string;
+  latestRender: HistoryRenderSummary | null;
+};
+
+type HistoryTimelineEvent =
+  | {
+      type: 'CALCULATED';
+      status: string | null;
+      fixtureStatus: string | null;
+      score: string | null;
+      evaluationVersion: string | null;
+      resultSource: string | null;
+      createdAt: string;
+    }
+  | {
+      type: 'OVERRIDE';
+      previousStatus: string | null;
+      newStatus: string | null;
+      reason: string | null;
+      createdAt: string;
+    };
+
+type HistorySelectionDetail = BulletinSelectionDto & {
+  calculatedStatus: string;
+  manualStatus: string | null;
+  currentResult: {
+    homeScore: number | null;
+    awayScore: number | null;
+    fixtureStatus: string | null;
+    evaluatedAt: string | null;
+    evaluationVersion: string | null;
+    resultSource: string | null;
+  } | null;
+  fixture: {
+    fixture: FixtureOption['fixture'];
+    details: {
+      homeCorners: number | null;
+      awayCorners: number | null;
+      halfTimeHomeScore: number | null;
+      halfTimeAwayScore: number | null;
+    } | null;
+  } | null;
+  timeline: HistoryTimelineEvent[];
+};
+
+type HistoryDetail = {
+  bulletin: BulletinDto['bulletin'] & {
+    createdAt: string;
+    updatedAt: string;
+    templateVersion: number;
+  };
+  selections: HistorySelectionDetail[];
+  renders: HistoryRenderSummary[];
+};
+
 type RenderResult = {
   renderId: string;
   bulletinId: string;
@@ -130,6 +199,13 @@ type EvaluatedSelection = {
     evaluatorVersion: number | null;
     reasonCode: string;
   };
+  resultSnapshot: {
+    homeScore: number | null;
+    awayScore: number | null;
+    fixtureStatus: string | null;
+    evaluatedAt: string;
+    resultSource: string | null;
+  };
 };
 
 type BulletinEvaluationResult = {
@@ -140,6 +216,7 @@ type BulletinEvaluationResult = {
 
 type Tab =
   | 'bulletins'
+  | 'history'
   | 'competitions'
   | 'teams'
   | 'markets'
@@ -167,6 +244,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export function App() {
   const [tab, setTab] = useState<Tab>('bulletins');
+  const [builderOpenId, setBuilderOpenId] = useState<string | null>(null);
+  const clearBuilderOpenId = useCallback(() => setBuilderOpenId(null), []);
+  const editBulletinInBuilder = useCallback((id: string) => {
+    setBuilderOpenId(id);
+    setTab('bulletins');
+  }, []);
 
   return (
     <main className="min-h-screen bg-studio-ink text-white">
@@ -182,6 +265,7 @@ export function App() {
             {(
               [
                 'bulletins',
+                'history',
                 'competitions',
                 'teams',
                 'markets',
@@ -205,7 +289,13 @@ export function App() {
           </nav>
         </header>
         {tab === 'competitions' && <CompetitionsPanel />}
-        {tab === 'bulletins' && <BulletinsPanel />}
+        {tab === 'bulletins' && (
+          <BulletinsPanel
+            openBulletinId={builderOpenId}
+            onOpened={clearBuilderOpenId}
+          />
+        )}
+        {tab === 'history' && <HistoryPanel onEdit={editBulletinInBuilder} />}
         {tab === 'teams' && <TeamsPanel />}
         {tab === 'markets' && <MarketsPanel />}
         {tab === 'fixtures' && <FixturesPanel />}
@@ -296,7 +386,10 @@ const defaultDraft: BulletinDraft = {
   selections: [{ fixtureId: '', marketId: '', odd: '1.50' }],
 };
 
-function BulletinsPanel() {
+function BulletinsPanel(props: {
+  openBulletinId: string | null;
+  onOpened: () => void;
+}) {
   const [items, setItems] = useState<BulletinListItem[]>([]);
   const [fixtures, setFixtures] = useState<FixtureOption[]>([]);
   const [markets, setMarkets] = useState<Market[]>([]);
@@ -307,6 +400,7 @@ function BulletinsPanel() {
   const [saveState, setSaveState] = useState('Unsaved');
   const [renderState, setRenderState] = useState('No export yet');
   const [lastRender, setLastRender] = useState<RenderResult | null>(null);
+  const [includeOldFixtures, setIncludeOldFixtures] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -318,7 +412,9 @@ function BulletinsPanel() {
       competitionResult,
     ] = await Promise.all([
       request<{ items: BulletinListItem[] }>('/api/bulletins'),
-      request<{ items: FixtureOption[] }>('/api/builder/fixtures?limit=100'),
+      request<{ items: FixtureOption[] }>(
+        `/api/builder/fixtures?limit=100&upcomingOnly=${includeOldFixtures ? 'false' : 'true'}`,
+      ),
       request<{ items: Market[] }>(
         '/api/builder/markets?activeOnly=false&limit=200',
       ),
@@ -330,11 +426,26 @@ function BulletinsPanel() {
     setMarkets(marketResult.items);
     setTeams(teamResult.items);
     setCompetitions(competitionResult.items);
+  }, [includeOldFixtures]);
+
+  const openBulletin = useCallback(async (id: string) => {
+    const result = await request<BulletinDto>(`/api/bulletins/${id}`);
+    setSaved(result);
+    setDraft(fromBulletin(result));
+    setSaveState(`Opened ${result.bulletin.publicCode}`);
+    clearRenderState();
   }, []);
 
   useEffect(() => {
     void load().catch((err: Error) => setError(err.message));
   }, [load]);
+
+  useEffect(() => {
+    if (!props.openBulletinId) return;
+    void openBulletin(props.openBulletinId)
+      .then(props.onOpened)
+      .catch((err: Error) => setError(err.message));
+  }, [openBulletin, props.openBulletinId, props.onOpened]);
 
   const totalOdd = useMemo(
     () => calculateDraftTotalOdd(draft.type, draft.selections),
@@ -384,14 +495,6 @@ function BulletinsPanel() {
     setDraft(fromBulletin(result));
     setSaveState(`Saved ${result.bulletin.publicCode}`);
     await load();
-  }
-
-  async function openBulletin(id: string) {
-    const result = await request<BulletinDto>(`/api/bulletins/${id}`);
-    setSaved(result);
-    setDraft(fromBulletin(result));
-    setSaveState(`Opened ${result.bulletin.publicCode}`);
-    clearRenderState();
   }
 
   async function duplicateBulletin() {
@@ -507,6 +610,22 @@ function BulletinsPanel() {
             </label>
           ))}
         </div>
+      </section>
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/10 bg-black/20 p-3">
+        <div>
+          <p className="text-sm font-semibold text-white">Fixture dropdown</p>
+          <p className="text-xs text-slate-400">
+            Showing upcoming/live fixtures by default.
+          </p>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-slate-300">
+          <input
+            type="checkbox"
+            checked={includeOldFixtures}
+            onChange={(event) => setIncludeOldFixtures(event.target.checked)}
+          />
+          Show old and finished fixtures
+        </label>
       </section>
       <CreateFixtureForm
         teams={teams}
@@ -1152,6 +1271,615 @@ function formatFixtureDateTime(value: string | null): string {
     dateStyle: 'short',
     timeStyle: 'short',
   });
+}
+
+function HistoryPanel(props: { onEdit: (id: string) => void }) {
+  const [items, setItems] = useState<HistoryListItem[]>([]);
+  const [selectedId, setSelectedId] = useState('');
+  const [detail, setDetail] = useState<HistoryDetail | null>(null);
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('all');
+  const [type, setType] = useState('all');
+  const [mode, setMode] = useState('all');
+  const [loading, setLoading] = useState(false);
+  const [action, setAction] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadList = useCallback(async () => {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (status !== 'all') params.set('status', status);
+    if (type !== 'all') params.set('type', type);
+    if (mode !== 'all') params.set('mode', mode);
+    params.set('limit', '50');
+    const response = await request<{ items: HistoryListItem[] }>(
+      `/api/history/bulletins?${params.toString()}`,
+    );
+    setItems(response.items);
+  }, [mode, search, status, type]);
+
+  const loadDetail = useCallback(async (id: string) => {
+    if (!id) {
+      setDetail(null);
+      return;
+    }
+    setDetail(await request<HistoryDetail>(`/api/history/bulletins/${id}`));
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    void loadList()
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [loadList]);
+
+  useEffect(() => {
+    void loadDetail(selectedId).catch((err: Error) => setError(err.message));
+  }, [loadDetail, selectedId]);
+
+  async function runAction(label: string, callback: () => Promise<void>) {
+    setAction(label);
+    setError(null);
+    setMessage(null);
+    try {
+      await callback();
+      await loadList();
+      if (selectedId) await loadDetail(selectedId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Action failed');
+    } finally {
+      setAction(null);
+    }
+  }
+
+  return (
+    <CatalogSection title="History" error={error}>
+      <section className="grid gap-3 rounded border border-white/10 bg-studio-panel p-4 md:grid-cols-4">
+        <TextInput label="Search code" value={search} onChange={setSearch} />
+        <SelectInput
+          label="Status"
+          value={status}
+          onChange={setStatus}
+          options={['all', 'PENDING', 'GREEN', 'RED', 'VOID', 'MANUAL']}
+        />
+        <SelectInput
+          label="Type"
+          value={type}
+          onChange={setType}
+          options={['all', 'SINGLE', 'MULTI']}
+        />
+        <SelectInput
+          label="Mode"
+          value={mode}
+          onChange={setMode}
+          options={['all', 'PRE_MATCH', 'LIVE']}
+        />
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-[360px_1fr]">
+        <div className="grid content-start gap-3">
+          {loading && (
+            <p className="text-sm text-slate-400">Loading history...</p>
+          )}
+          {!loading && items.length === 0 && (
+            <p className="rounded border border-white/10 bg-studio-panel p-4 text-sm text-slate-300">
+              No bulletins found.
+            </p>
+          )}
+          {items.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`rounded border p-4 text-left focus:outline focus:outline-2 focus:outline-studio-lime ${
+                selectedId === item.id
+                  ? 'border-studio-lime bg-studio-lime/10'
+                  : 'border-white/10 bg-studio-panel'
+              }`}
+              onClick={() => setSelectedId(item.id)}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <strong>{item.publicCode}</strong>
+                <StatusBadge status={item.status} />
+              </div>
+              <p className="mt-2 text-sm text-slate-300">
+                {item.type} | {item.mode} | {item.selectionCount} selections
+              </p>
+              <p className="mt-1 text-xs text-slate-400">
+                Updated {formatFixtureDateTime(item.updatedAt)}
+              </p>
+              {item.latestRender && (
+                <p className="mt-2 text-xs text-studio-lime">
+                  Latest render{' '}
+                  {formatFixtureDateTime(item.latestRender.createdAt)}
+                </p>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {detail ? (
+          <section className="grid gap-4 rounded border border-white/10 bg-studio-panel p-4">
+            <div className="flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="text-sm text-studio-lime">
+                  {detail.bulletin.publicCode}
+                </p>
+                <h3 className="text-2xl font-bold">
+                  {detail.bulletin.type} {detail.bulletin.mode}
+                </h3>
+                <p className="mt-1 text-sm text-slate-300">
+                  Total odd {detail.bulletin.totalOdd ?? '-'} | Stake{' '}
+                  {detail.bulletin.stake ?? '-'} | Template v
+                  {detail.bulletin.templateVersion}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded border border-white/10 px-3 py-2 text-sm font-semibold"
+                  title="Open this saved bulletin in the Bulletins builder so you can edit it."
+                  onClick={() => props.onEdit(detail.bulletin.id)}
+                >
+                  Edit in Builder
+                </button>
+                <button
+                  type="button"
+                  className="rounded border border-white/10 px-3 py-2 text-sm font-semibold"
+                  disabled={action !== null}
+                  title="Create a new editable bulletin using this bulletin as the starting point."
+                  onClick={() =>
+                    void runAction('Duplicate', async () => {
+                      const duplicated = await request<BulletinDto>(
+                        `/api/bulletins/${detail.bulletin.id}/duplicate`,
+                        { method: 'POST' },
+                      );
+                      setSelectedId(duplicated.bulletin.id);
+                    })
+                  }
+                >
+                  Duplicate
+                </button>
+                <button
+                  type="button"
+                  className="rounded bg-studio-lime px-3 py-2 text-sm font-semibold text-black"
+                  disabled={action !== null}
+                  title="Recalculate all selections in this bulletin using the current fixture results and manual overrides."
+                  onClick={() =>
+                    void runAction('Re-evaluate bulletin', async () => {
+                      await request<BulletinEvaluationResult>(
+                        `/api/bulletins/${detail.bulletin.id}/evaluate`,
+                        { method: 'POST' },
+                      );
+                    })
+                  }
+                >
+                  Re-evaluate bulletin
+                </button>
+                <button
+                  type="button"
+                  className="rounded bg-studio-lime px-3 py-2 text-sm font-semibold text-black"
+                  disabled={action !== null}
+                  title="Generate a fresh PNG from the current saved state and start the download."
+                  onClick={() =>
+                    void runAction('Render current', async () => {
+                      const render = await request<RenderResult>(
+                        `/api/bulletins/${detail.bulletin.id}/render`,
+                        {
+                          method: 'POST',
+                          body: JSON.stringify({ format: 'FEED' }),
+                        },
+                      );
+                      downloadFile(render.downloadUrl);
+                      setMessage(`Rendered and downloading ${render.fileName}`);
+                    })
+                  }
+                >
+                  Render current PNG
+                </button>
+              </div>
+            </div>
+
+            {action && <p className="text-sm text-slate-300">{action}...</p>}
+            {message && <p className="text-sm text-studio-lime">{message}</p>}
+
+            <div className="grid gap-3">
+              {detail.selections.map((item) => (
+                <HistorySelectionCard
+                  key={item.selection.id}
+                  item={item}
+                  disabled={action !== null}
+                  onAction={(label, callback) =>
+                    void runAction(label, callback)
+                  }
+                  setMessage={setMessage}
+                />
+              ))}
+            </div>
+
+            <section className="grid gap-2 border-t border-white/10 pt-4">
+              <h3 className="font-semibold">Render history</h3>
+              <p className="text-sm text-slate-400">
+                Use Render current PNG above to create and download a new
+                export. Older generated files stay available here.
+              </p>
+              {detail.renders.length === 0 && (
+                <p className="text-sm text-slate-400">No renders yet.</p>
+              )}
+              {detail.renders.map((render) => (
+                <article
+                  key={render.id}
+                  className="flex flex-col gap-2 rounded border border-white/10 bg-black/20 p-3 text-sm md:flex-row md:items-center md:justify-between"
+                >
+                  <div>
+                    <p className="font-semibold">
+                      {render.fileName ?? 'Render'} | {render.format}{' '}
+                      {render.dimensions ?? ''}
+                    </p>
+                    <p className="text-slate-400">
+                      {formatFixtureDateTime(render.createdAt)} | renderer{' '}
+                      {render.rendererVersion ?? 'N/A'} | fp{' '}
+                      {render.fingerprint ?? 'N/A'}
+                    </p>
+                  </div>
+                  <a
+                    className="rounded border border-white/10 px-3 py-2 text-center font-semibold"
+                    href={render.downloadUrl}
+                    title="Download this previously generated PNG render."
+                  >
+                    Download
+                  </a>
+                </article>
+              ))}
+            </section>
+          </section>
+        ) : (
+          <section className="rounded border border-white/10 bg-studio-panel p-4 text-sm text-slate-300">
+            Select a bulletin to inspect results, overrides and renders.
+          </section>
+        )}
+      </section>
+    </CatalogSection>
+  );
+}
+
+function HistorySelectionCard(props: {
+  item: HistorySelectionDetail;
+  disabled: boolean;
+  onAction: (label: string, callback: () => Promise<void>) => void;
+  setMessage: (value: string) => void;
+}) {
+  const [manualStatus, setManualStatus] = useState('GREEN');
+  const [reason, setReason] = useState('');
+  const fixture = props.item.fixture?.fixture ?? null;
+  const details = props.item.fixture?.details ?? null;
+  const [fixtureStatus, setFixtureStatus] = useState(
+    fixture?.status ?? 'SCHEDULED',
+  );
+  const [homeScore, setHomeScore] = useState(
+    fixture?.homeScore === null || fixture?.homeScore === undefined
+      ? ''
+      : String(fixture.homeScore),
+  );
+  const [awayScore, setAwayScore] = useState(
+    fixture?.awayScore === null || fixture?.awayScore === undefined
+      ? ''
+      : String(fixture.awayScore),
+  );
+  const [homeCorners, setHomeCorners] = useState(
+    details?.homeCorners === null || details?.homeCorners === undefined
+      ? ''
+      : String(details.homeCorners),
+  );
+  const [awayCorners, setAwayCorners] = useState(
+    details?.awayCorners === null || details?.awayCorners === undefined
+      ? ''
+      : String(details.awayCorners),
+  );
+
+  useEffect(() => {
+    setFixtureStatus(fixture?.status ?? 'SCHEDULED');
+    setHomeScore(
+      fixture?.homeScore === null || fixture?.homeScore === undefined
+        ? ''
+        : String(fixture.homeScore),
+    );
+    setAwayScore(
+      fixture?.awayScore === null || fixture?.awayScore === undefined
+        ? ''
+        : String(fixture.awayScore),
+    );
+    setHomeCorners(
+      details?.homeCorners === null || details?.homeCorners === undefined
+        ? ''
+        : String(details.homeCorners),
+    );
+    setAwayCorners(
+      details?.awayCorners === null || details?.awayCorners === undefined
+        ? ''
+        : String(details.awayCorners),
+    );
+  }, [details, fixture]);
+
+  return (
+    <article className="grid gap-3 rounded border border-white/10 bg-black/20 p-4">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <p className="text-sm text-slate-400">
+            #{props.item.selection.position} |{' '}
+            {props.item.snapshot.competitionName ?? 'No competition'}
+          </p>
+          <h4 className="text-lg font-semibold">
+            {props.item.snapshot.homeTeamName} vs{' '}
+            {props.item.snapshot.awayTeamName}
+          </h4>
+          <p className="text-sm text-slate-300">
+            {props.item.snapshot.marketName} | Odd {props.item.selection.odd}
+          </p>
+          {props.item.market && !props.item.market.autoEvaluable && (
+            <p className="mt-1 text-sm text-amber-300">
+              Manual market: this selection needs a manual override because it
+              has no automatic evaluator.
+            </p>
+          )}
+          {props.item.market?.autoEvaluable &&
+            !props.item.market.evaluatorKey && (
+              <p className="mt-1 text-sm text-amber-300">
+                Automatic evaluation is enabled, but this market has no
+                evaluator configured.
+              </p>
+            )}
+        </div>
+        <div className="grid gap-1 text-sm">
+          <span>Calculated: {props.item.calculatedStatus}</span>
+          <span>Manual: {props.item.manualStatus ?? '-'}</span>
+          <span>
+            Effective: <StatusBadge status={props.item.effectiveStatus} />
+          </span>
+        </div>
+      </div>
+
+      <div className="grid gap-3 rounded border border-white/10 p-3 md:grid-cols-5">
+        <SelectInput
+          label="Fixture status"
+          value={fixtureStatus}
+          onChange={setFixtureStatus}
+          options={[
+            'SCHEDULED',
+            'LIVE',
+            'FINISHED',
+            'POSTPONED',
+            'CANCELLED',
+            'ABANDONED',
+            'UNKNOWN',
+          ]}
+        />
+        <TextInput
+          label="Home score"
+          value={homeScore}
+          onChange={setHomeScore}
+        />
+        <TextInput
+          label="Away score"
+          value={awayScore}
+          onChange={setAwayScore}
+        />
+        <TextInput
+          label="Home corners"
+          value={homeCorners}
+          onChange={setHomeCorners}
+        />
+        <TextInput
+          label="Away corners"
+          value={awayCorners}
+          onChange={setAwayCorners}
+        />
+        <button
+          type="button"
+          className="rounded bg-studio-lime px-3 py-2 text-sm font-semibold text-black md:col-span-2"
+          disabled={props.disabled || !fixture}
+          title="Save the result fields shown here, then recalculate this selection with those values."
+          onClick={() =>
+            props.onAction('Save result & re-evaluate', async () => {
+              if (!fixture) return;
+              await request(`/api/fixtures/${fixture.id}/result`, {
+                method: 'PATCH',
+                body: JSON.stringify({
+                  status: fixtureStatus,
+                  homeScore: optionalInteger(homeScore),
+                  awayScore: optionalInteger(awayScore),
+                  homeCorners: optionalInteger(homeCorners),
+                  awayCorners: optionalInteger(awayCorners),
+                  liveMinute: fixture.liveMinute,
+                }),
+              });
+              await request(
+                `/api/selections/${props.item.selection.id}/evaluate`,
+                {
+                  method: 'POST',
+                },
+              );
+            })
+          }
+        >
+          Save result & re-evaluate
+        </button>
+        {fixture?.sourceType === 'SYNCED' && (
+          <button
+            type="button"
+            className="rounded border border-white/10 px-3 py-2 text-sm font-semibold"
+            disabled={props.disabled}
+            title="Ask the configured GOAL API provider for the latest result for this synced fixture, then recalculate this selection."
+            onClick={() =>
+              props.onAction('Refresh provider result', async () => {
+                const sync = await request<SyncResult>(
+                  `/api/sync/fixtures/${fixture.id}/result`,
+                  {
+                    method: 'POST',
+                  },
+                );
+                const evaluated = await request<EvaluatedSelection>(
+                  `/api/selections/${props.item.selection.id}/evaluate`,
+                  {
+                    method: 'POST',
+                  },
+                );
+                props.setMessage(providerResultMessage(sync, evaluated));
+              })
+            }
+          >
+            Refresh provider result
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <SelectInput
+          label="Manual status"
+          value={manualStatus}
+          onChange={setManualStatus}
+          options={['GREEN', 'RED', 'VOID', 'PENDING', 'MANUAL']}
+        />
+        <TextInput label="Reason" value={reason} onChange={setReason} />
+        <button
+          type="button"
+          className="rounded border border-white/10 px-3 py-2 text-sm font-semibold"
+          disabled={props.disabled}
+          title="Force this selection to use the manual status chosen here instead of the calculated status."
+          onClick={() =>
+            props.onAction('Set manual override', async () => {
+              await request(
+                `/api/selections/${props.item.selection.id}/settlement-override`,
+                {
+                  method: 'PATCH',
+                  body: JSON.stringify({
+                    status: manualStatus,
+                    reason: reason || undefined,
+                  }),
+                },
+              );
+            })
+          }
+        >
+          Set manual override
+        </button>
+        <button
+          type="button"
+          className="rounded border border-white/10 px-3 py-2 text-sm font-semibold"
+          disabled={props.disabled}
+          title="Remove the manual override and return this selection to its calculated status."
+          onClick={() =>
+            props.onAction('Reset override', async () => {
+              await request(
+                `/api/selections/${props.item.selection.id}/settlement-override`,
+                { method: 'DELETE' },
+              );
+            })
+          }
+        >
+          Reset to automatic
+        </button>
+        <button
+          type="button"
+          className="rounded border border-white/10 px-3 py-2 text-sm font-semibold"
+          disabled={props.disabled}
+          title="Recalculate only this selection using the current saved fixture result and market."
+          onClick={() =>
+            props.onAction('Re-evaluate selection', async () => {
+              await request(
+                `/api/selections/${props.item.selection.id}/evaluate`,
+                {
+                  method: 'POST',
+                },
+              );
+            })
+          }
+        >
+          Re-evaluate selection
+        </button>
+      </div>
+
+      <details className="rounded border border-white/10 p-3 text-sm text-slate-300">
+        <summary className="cursor-pointer font-semibold text-white">
+          Result timeline
+        </summary>
+        <div className="mt-3 grid gap-2">
+          {props.item.timeline.length === 0 && <p>No result events yet.</p>}
+          {props.item.timeline.map((event, index) => (
+            <p key={`${event.createdAt}-${index}`}>
+              {formatFixtureDateTime(event.createdAt)} |{' '}
+              {event.type === 'CALCULATED'
+                ? `Calculated ${event.status ?? '-'} (${event.score ?? 'no score'}, ${event.fixtureStatus ?? '-'})`
+                : `Override ${event.previousStatus ?? '-'} -> ${event.newStatus ?? 'automatic'}${event.reason ? ` | ${event.reason}` : ''}`}
+            </p>
+          ))}
+        </div>
+      </details>
+    </article>
+  );
+}
+
+function SelectInput(props: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+}) {
+  return (
+    <label className="text-sm text-slate-300">
+      {props.label}
+      <select
+        className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-white"
+        value={props.value}
+        onChange={(event) => props.onChange(event.target.value)}
+      >
+        {props.options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function StatusBadge(props: { status: string }) {
+  return (
+    <span className="inline-flex rounded border border-white/10 px-2 py-1 text-xs font-semibold">
+      {props.status}
+    </span>
+  );
+}
+
+function optionalInteger(value: string): number | null {
+  if (!value.trim()) return null;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error('Scores and corners must be non-negative integers');
+  }
+  return parsed;
+}
+
+function downloadFile(url: string): void {
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.rel = 'noreferrer';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
+function providerResultMessage(
+  sync: SyncResult,
+  evaluated: EvaluatedSelection,
+): string {
+  const snapshot = evaluated.resultSnapshot;
+  const score =
+    snapshot.homeScore !== null && snapshot.awayScore !== null
+      ? `${snapshot.homeScore}-${snapshot.awayScore}`
+      : 'score unavailable';
+  return `Provider refresh ${sync.status.toLowerCase()}: ${sync.updated} updated, ${sync.unresolved} unresolved, ${sync.failed} failed. Saved status ${snapshot.fixtureStatus ?? 'UNKNOWN'}, ${score}. Selection is ${evaluated.effectiveStatus}.`;
 }
 
 function CompetitionsPanel() {

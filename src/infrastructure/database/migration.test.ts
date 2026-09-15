@@ -32,6 +32,7 @@ describe('database migrations', () => {
         'bulletins',
         'bulletin_selection_snapshots',
         'settlement_overrides',
+        'selection_result_snapshot_events',
         'templates',
         'template_versions',
         'sync_records',

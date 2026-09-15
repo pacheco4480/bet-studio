@@ -32,6 +32,7 @@ export type SettlementBulletinAggregate = {
     selection: BulletinSelection;
     snapshot: BulletinSelectionSnapshot;
     resultSnapshot?: SelectionResultSnapshot;
+    resultSnapshotEvent?: SelectionResultSnapshot;
     overrides?: SettlementOverride[];
   }>;
 };
@@ -92,6 +93,7 @@ export class SettlementService {
       updatedAt: nowUtc(),
     };
     item.resultSnapshot = evaluated.resultSnapshot;
+    item.resultSnapshotEvent = evaluated.resultSnapshot;
     aggregate.bulletin = this.withDerivedBulletinStatus(aggregate);
     this.bulletins.saveAggregate(aggregate);
     return evaluated;
@@ -107,6 +109,7 @@ export class SettlementService {
         updatedAt: nowUtc(),
       };
       item.resultSnapshot = evaluated.resultSnapshot;
+      item.resultSnapshotEvent = evaluated.resultSnapshot;
       return evaluated;
     });
     aggregate.bulletin = this.withDerivedBulletinStatus(aggregate);

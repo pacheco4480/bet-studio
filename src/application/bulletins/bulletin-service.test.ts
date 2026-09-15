@@ -64,7 +64,7 @@ describe('BulletinService', () => {
       homeTeamName: 'Very Long Home Team Name United',
       awayTeamName: 'Away City',
       competitionName: 'Liga Portugal',
-      marketCode: 'OVER_2_5',
+      marketCode: 'TEST_OVER_2_5',
     });
   });
 
@@ -253,6 +253,30 @@ describe('BulletinService', () => {
     });
     expect(fixture.homeTeam.name).toBe(seed.homeTeam.name);
   });
+
+  it('hides finished old fixtures from the builder list by default', () => {
+    const { repository, service, seed } = harness();
+    repository.saveFixture({
+      ...seed.fixtures[0],
+      id: createId<'FixtureId'>(),
+      kickoffAt: '2026-01-01T12:00:00.000Z' as never,
+      status: 'FINISHED',
+      homeScore: 2,
+      awayScore: 1,
+      updatedAt: nowUtc(),
+    });
+
+    expect(
+      service
+        .listFixtures({ limit: 20 })
+        .items.every((item) => item.fixture.status !== 'FINISHED'),
+    ).toBe(true);
+    expect(
+      service
+        .listFixtures({ limit: 20, upcomingOnly: false })
+        .items.some((item) => item.fixture.status === 'FINISHED'),
+    ).toBe(true);
+  });
 });
 
 function seedCatalog(database: TestDatabase) {
@@ -325,7 +349,7 @@ function seedCatalog(database: TestDatabase) {
 
   const marketA: Market = {
     id: createId<'MarketId'>(),
-    code: 'OVER_2_5',
+    code: 'TEST_OVER_2_5',
     name: 'Over 2.5 Goals',
     category: 'Total Goals',
     active: true,
@@ -338,7 +362,7 @@ function seedCatalog(database: TestDatabase) {
   const marketB: Market = {
     ...marketA,
     id: createId<'MarketId'>(),
-    code: 'BTTS_YES',
+    code: 'TEST_BTTS_YES',
     name: 'Both Teams Score',
     category: 'BTTS',
     evaluatorKey: 'BTTS',

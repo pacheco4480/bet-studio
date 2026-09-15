@@ -11,6 +11,7 @@ import type {
   BulletinId,
   BulletinSelectionId,
 } from '../../../domain/shared/ids.js';
+import { createId } from '../../../domain/shared/ids.js';
 import type { BetStudioDatabase } from '../connection.js';
 import {
   bulletinCodeSequence,
@@ -18,6 +19,7 @@ import {
   bulletinSelections,
   bulletins,
   selectionResultSnapshots,
+  selectionResultSnapshotEvents,
   settlementOverrides,
 } from '../schema.js';
 
@@ -27,6 +29,7 @@ export type BulletinAggregate = {
     selection: BulletinSelection;
     snapshot: BulletinSelectionSnapshot;
     resultSnapshot?: SelectionResultSnapshot;
+    resultSnapshotEvent?: SelectionResultSnapshot;
     overrides?: SettlementOverride[];
   }>;
 };
@@ -92,6 +95,15 @@ export class DrizzleBulletinRepository {
             .onConflictDoUpdate({
               target: selectionResultSnapshots.selectionId,
               set: item.resultSnapshot,
+            })
+            .run();
+        }
+        if (item.resultSnapshotEvent) {
+          tx.insert(selectionResultSnapshotEvents)
+            .values({
+              id: createId<'SelectionResultSnapshotEventId'>(),
+              ...item.resultSnapshotEvent,
+              calculatedStatus: item.selection.calculatedStatus,
             })
             .run();
         }

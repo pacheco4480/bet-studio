@@ -427,6 +427,16 @@ Capabilities:
 - Re-render
 - Export
 
+Result management in history must show calculated, manual and effective
+selection statuses. Users can correct fixture result fields, re-evaluate a
+selection or the whole bulletin, apply or reset manual settlement overrides and
+inspect the resulting audit timeline. Synced fixtures may expose an explicit
+provider result refresh before re-evaluation when the provider supports it.
+
+Render history must preserve previous render records and exported artifacts.
+Rendering from the current saved bulletin state creates a new render record and
+must not overwrite older records.
+
 Deleting historical records should require explicit confirmation.
 
 ---

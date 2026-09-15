@@ -396,6 +396,32 @@ export const selectionResultSnapshots = sqliteTable(
   },
 );
 
+export const selectionResultSnapshotEvents = sqliteTable(
+  'selection_result_snapshot_events',
+  {
+    id,
+    selectionId: text('selection_id')
+      .notNull()
+      .references(() => bulletinSelections.id, { onDelete: 'cascade' }),
+    homeScore: integer('home_score'),
+    awayScore: integer('away_score'),
+    fixtureStatus: text('fixture_status'),
+    calculatedStatus: text('calculated_status'),
+    evaluatedAt: text('evaluated_at'),
+    evaluationVersion: text('evaluation_version'),
+    resultSource: text('result_source'),
+    ...timestamps,
+  },
+  (table) => ({
+    selectionIdx: index('selection_result_events_selection_id_idx').on(
+      table.selectionId,
+    ),
+    createdAtIdx: index('selection_result_events_created_at_idx').on(
+      table.createdAt,
+    ),
+  }),
+);
+
 export const settlementOverrides = sqliteTable(
   'settlement_overrides',
   {

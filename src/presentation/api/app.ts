@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import { readFile } from 'node:fs/promises';
 import { BulletinService } from '../../application/bulletins/bulletin-service.js';
+import type { HistoryService } from '../../application/history/history-service.js';
 import type { RenderingService } from '../../application/rendering/rendering-service.js';
 import {
   CatalogService,
@@ -19,6 +20,7 @@ import {
 export function buildApiApp(options?: {
   bulletinService?: BulletinService;
   catalogService?: CatalogService;
+  historyService?: HistoryService;
   renderingService?: RenderingService;
   settlementService?: SettlementService;
   synchronizationService?: SynchronizationService;
@@ -55,10 +57,15 @@ export function buildApiApp(options?: {
         ),
     );
     app.get('/api/builder/fixtures', (request) => {
-      const query = request.query as { search?: string; limit?: string };
+      const query = request.query as {
+        search?: string;
+        limit?: string;
+        upcomingOnly?: string;
+      };
       return bulletins.listFixtures({
         search: query.search,
         limit: query.limit ? Number(query.limit) : undefined,
+        upcomingOnly: query.upcomingOnly !== 'false',
       });
     });
     app.post('/api/builder/fixtures', (request, reply) =>
@@ -105,6 +112,23 @@ export function buildApiApp(options?: {
         )
         .send(png);
     });
+  }
+
+  if (options?.historyService) {
+    const history = options.historyService;
+
+    app.get('/api/history/bulletins', (request) =>
+      history.listBulletins(request.query),
+    );
+    app.get('/api/history/bulletins/:id', (request) =>
+      history.getBulletin((request.params as { id: string }).id),
+    );
+    app.patch('/api/fixtures/:id/result', (request) =>
+      history.updateFixtureResult(
+        (request.params as { id: string }).id,
+        request.body,
+      ),
+    );
   }
 
   if (options?.catalogService) {

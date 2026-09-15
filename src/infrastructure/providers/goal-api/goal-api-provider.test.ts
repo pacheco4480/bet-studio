@@ -78,6 +78,39 @@ describe('GoalApiProvider', () => {
     });
   });
 
+  it('normalizes GOAL API final team score fields', async () => {
+    const http: JsonHttpClient = {
+      get<T>() {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              id: 'match_ft_fields',
+              status: 'FINISHED',
+              homeTeamFtScore: 3,
+              awayTeamFtScore: 2,
+              homeTeamHalftimeScore: 1,
+              awayTeamHalftimeScore: 0,
+            },
+          } as T,
+          headers: new Headers(),
+        } satisfies HttpResponse<T>);
+      },
+    };
+
+    const result = await new GoalApiProvider(http).getFixture(
+      'match_ft_fields',
+    );
+
+    expect(result).toMatchObject({
+      status: 'FINISHED',
+      homeScore: 3,
+      awayScore: 2,
+      halfTimeHomeScore: 1,
+      halfTimeAwayScore: 0,
+    });
+  });
+
   it('rejects malformed provider responses', async () => {
     const http: JsonHttpClient = {
       get<T>() {

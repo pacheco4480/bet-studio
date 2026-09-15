@@ -98,6 +98,18 @@ const fixtureSchema = z
     awayScore: z.union([z.string(), z.number()]).nullable().optional(),
     halfTimeHomeScore: z.union([z.string(), z.number()]).nullable().optional(),
     halfTimeAwayScore: z.union([z.string(), z.number()]).nullable().optional(),
+    homeTeamScore: z.union([z.string(), z.number()]).nullable().optional(),
+    awayTeamScore: z.union([z.string(), z.number()]).nullable().optional(),
+    homeTeamHalftimeScore: z
+      .union([z.string(), z.number()])
+      .nullable()
+      .optional(),
+    awayTeamHalftimeScore: z
+      .union([z.string(), z.number()])
+      .nullable()
+      .optional(),
+    homeTeamFtScore: z.union([z.string(), z.number()]).nullable().optional(),
+    awayTeamFtScore: z.union([z.string(), z.number()]).nullable().optional(),
   })
   .passthrough();
 
@@ -171,7 +183,8 @@ export class GoalApiProvider implements FootballDataProvider {
       `fixtures/${encodeURIComponent(externalFixtureId)}`,
     );
     if (body.data === null) return null;
-    return this.normalizeFixture(fixtureSchema.parse(body.data));
+    const fixture = fixtureSchema.parse(body.data);
+    return this.normalizeFixture(fixture);
   }
 
   private async readPages<T>(
@@ -302,10 +315,18 @@ export class GoalApiProvider implements FootballDataProvider {
           : (awayTeam?.name ?? ''),
       kickoffAt: fixture.kickoffUtc ?? null,
       status: normalizeStatus(fixture.status ?? fixture.matchStatus ?? null),
-      homeScore: nullableInteger(fixture.homeScore ?? fixture.score?.home),
-      awayScore: nullableInteger(fixture.awayScore ?? fixture.score?.away),
-      halfTimeHomeScore: nullableInteger(fixture.halfTimeHomeScore),
-      halfTimeAwayScore: nullableInteger(fixture.halfTimeAwayScore),
+      homeScore: nullableInteger(
+        fixture.homeScore ?? fixture.score?.home ?? fixture.homeTeamFtScore,
+      ),
+      awayScore: nullableInteger(
+        fixture.awayScore ?? fixture.score?.away ?? fixture.awayTeamFtScore,
+      ),
+      halfTimeHomeScore: nullableInteger(
+        fixture.halfTimeHomeScore ?? fixture.homeTeamHalftimeScore,
+      ),
+      halfTimeAwayScore: nullableInteger(
+        fixture.halfTimeAwayScore ?? fixture.awayTeamHalftimeScore,
+      ),
       homeCorners: null,
       awayCorners: null,
     };

@@ -558,6 +558,12 @@ Preserve what result was used.
 Prevent future provider corrections from silently changing old settlements.
 Allow deterministic re-evaluation.
 Support debugging.
+
+Implementation note:
+
+The current selection result snapshot may be stored as the latest state for fast
+reads, while append-only result snapshot events preserve evaluation history over
+time.
 18. Manual Settlement Override
 
 Manual overrides should remain auditable.

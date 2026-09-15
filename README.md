@@ -26,7 +26,7 @@ The initial scope includes:
 - Automatic settlement for supported betting markets.
 - Manual settlement overrides.
 - Deterministic social-media rendering.
-- Bulletin history and re-rendering.
+- Bulletin history, result management and re-rendering.
 - Optional football-data provider synchronization.
 
 The first target export format is:
@@ -263,6 +263,12 @@ A saved bulletin can preserve the relevant historical state, including:
 Changes to current catalog data should not silently alter historical bulletins.
 
 Likewise, a future visual redesign should not destructively modify the template version used by an existing historical render.
+
+The History workflow lets the user browse saved bulletins, inspect calculated
+and manual/effective selection statuses, correct local fixture facts, re-evaluate
+selections or whole bulletins, apply/reset manual overrides, inspect result
+timeline events, and create new current renders without replacing previous
+render records.
 
 ---
 
