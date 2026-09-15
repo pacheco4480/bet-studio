@@ -196,6 +196,39 @@ describe('rendering', () => {
 
     expect(renderer.lastModel?.selections[0]?.resultText).toBe('2-1');
   });
+
+  it('refuses to read render files outside the configured export directory', async () => {
+    database = createMigratedTestDatabase();
+    const recordRepository = new MemoryRenderRecordRepository();
+    const service = new RenderingService(
+      new DrizzleBulletinBuilderRepository(database.db),
+      recordRepository,
+      new FakeRenderer(),
+      dirname(database.path),
+    );
+    recordRepository.saveRenderRecord({
+      id: createId<'RenderRecordId'>(),
+      bulletinId: createId<'BulletinId'>(),
+      templateId: createId<'TemplateId'>(),
+      templateVersion: 1,
+      outputFormat: 'FEED',
+      filePath: 'C:/outside/bet-studio-render.png',
+      fileName: 'bet-studio-render.png',
+      width: FEED_WIDTH,
+      height: FEED_HEIGHT,
+      rendererVersion: '1',
+      fingerprint: null,
+      renderInputHash: null,
+      createdAt: nowUtc(),
+    });
+
+    const [renderId] = recordRepository.records.keys();
+    if (!renderId) throw new Error('Expected render record');
+
+    await expect(service.readRenderPng(renderId)).rejects.toThrow(
+      'Render file is outside the export directory',
+    );
+  });
 });
 
 class FakeRenderer {
@@ -218,7 +251,7 @@ class FakeRenderer {
 }
 
 class MemoryRenderRecordRepository {
-  private readonly records = new Map<string, RenderRecord>();
+  readonly records = new Map<string, RenderRecord>();
 
   saveRenderRecord(record: RenderRecord): void {
     this.records.set(record.id, record);

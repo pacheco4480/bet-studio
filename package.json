@@ -24,7 +24,6 @@
     "format:check": "prettier . --check"
   },
   "dependencies": {
-    "@fastify/cors": "^11.1.0",
     "@vitejs/plugin-react": "^5.0.0",
     "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.2",

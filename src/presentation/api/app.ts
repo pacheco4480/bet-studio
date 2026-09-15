@@ -1,5 +1,4 @@
 import Fastify from 'fastify';
-import { readFile } from 'node:fs/promises';
 import { BulletinService } from '../../application/bulletins/bulletin-service.js';
 import type { HistoryService } from '../../application/history/history-service.js';
 import type { RenderingService } from '../../application/rendering/rendering-service.js';
@@ -27,6 +26,7 @@ export function buildApiApp(options?: {
 }) {
   const app = Fastify({
     logger: true,
+    bodyLimit: 256 * 1024,
   });
 
   app.get('/api/health', () => {
@@ -100,17 +100,16 @@ export function buildApiApp(options?: {
         );
     });
     app.get('/api/renders/:id/download', async (request, reply) => {
-      const record = rendering.getRenderRecord(
+      const render = await rendering.readRenderPng(
         (request.params as { id: string }).id,
       );
-      const png = await readFile(record.filePath);
       return reply
         .header('content-type', 'image/png')
         .header(
           'content-disposition',
-          `attachment; filename="${record.fileName ?? 'bet-studio-render.png'}"`,
+          `attachment; filename="${render.fileName}"`,
         )
-        .send(png);
+        .send(render.png);
     });
   }
 
@@ -281,36 +280,48 @@ export function buildApiApp(options?: {
       'API request failed',
     );
     if (error instanceof ValidationError)
-      return reply
-        .code(400)
-        .send({ error: error.code, message: error.message });
+      return sendError(reply, 400, error.code, error.message);
     if (error instanceof NotFoundError)
-      return reply
-        .code(404)
-        .send({ error: error.code, message: error.message });
+      return sendError(reply, 404, error.code, error.message);
     if (error instanceof ConflictError)
-      return reply
-        .code(409)
-        .send({ error: error.code, message: error.message });
+      return sendError(reply, 409, error.code, error.message);
     if (error instanceof ProviderError) {
-      return reply
-        .code(503)
-        .send({ error: error.code, message: error.message });
+      return sendError(reply, 503, error.code, error.message);
     }
     if (error instanceof RenderingError) {
-      return reply
-        .code(503)
-        .send({ error: error.code, message: error.message });
+      return sendError(reply, 503, error.code, error.message);
     }
     if (typeof error === 'object' && error !== null && 'issues' in error) {
-      return reply
-        .code(400)
-        .send({ error: 'VALIDATION_ERROR', message: 'Invalid request' });
+      return sendError(reply, 400, 'VALIDATION_ERROR', 'Invalid request');
     }
-    return reply
-      .code(500)
-      .send({ error: 'INTERNAL_ERROR', message: 'Unexpected server error' });
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'statusCode' in error &&
+      error.statusCode === 413
+    ) {
+      return sendError(
+        reply,
+        413,
+        'REQUEST_BODY_TOO_LARGE',
+        'Request body is too large',
+      );
+    }
+    return sendError(reply, 500, 'INTERNAL_ERROR', 'Unexpected server error');
   });
 
   return app;
+}
+
+function sendError(
+  reply: {
+    code: (statusCode: number) => {
+      send: (payload: unknown) => unknown;
+    };
+  },
+  statusCode: number,
+  code: string,
+  message: string,
+) {
+  return reply.code(statusCode).send({ error: { code, message } });
 }

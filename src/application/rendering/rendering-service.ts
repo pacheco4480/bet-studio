@@ -10,7 +10,11 @@ import type {
 import { createId } from '../../domain/shared/ids.js';
 import type { BulletinId, RenderRecordId } from '../../domain/shared/ids.js';
 import { nowUtc } from '../../domain/shared/time.js';
-import { NotFoundError, ValidationError } from '../../shared/errors.js';
+import {
+  NotFoundError,
+  RenderingError,
+  ValidationError,
+} from '../../shared/errors.js';
 import { betStudioFeedTemplateV1 } from './feed-template.js';
 import { stableHash } from './fingerprint.js';
 import { createRenderPlan, validateRenderPlan } from './layout.js';
@@ -127,6 +131,36 @@ export class RenderingService {
     const record = this.records.getRenderRecord(id as RenderRecordId);
     if (!record) throw new NotFoundError('Render record not found');
     return record;
+  }
+
+  async readRenderPng(id: string): Promise<{
+    png: Buffer;
+    fileName: string;
+  }> {
+    const record = this.getRenderRecord(id);
+    const resolvedRoot = path.resolve(this.outputDirectory);
+    const resolvedFile = path.resolve(record.filePath);
+    const relative = path.relative(resolvedRoot, resolvedFile);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      throw new RenderingError('Render file is outside the export directory');
+    }
+
+    try {
+      const { readFile } = await import('node:fs/promises');
+      return {
+        png: await readFile(resolvedFile),
+        fileName: record.fileName ?? 'bet-studio-render.png',
+      };
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        'code' in error &&
+        error.code === 'ENOENT'
+      ) {
+        throw new NotFoundError('Render file not found');
+      }
+      throw new RenderingError('Render file could not be read');
+    }
   }
 
   private getTemplate(version: number): RenderTemplateVersion {

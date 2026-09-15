@@ -234,9 +234,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as {
+      error?: { message?: string };
       message?: string;
     } | null;
-    throw new Error(body?.message ?? 'Request failed');
+    throw new Error(body?.error?.message ?? body?.message ?? 'Request failed');
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;

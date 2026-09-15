@@ -146,10 +146,39 @@ describe('Bet Studio catalog API', () => {
       });
 
       expect(response.statusCode).toBe(400);
-      expect(response.json<{ error: string }>().error).toBe('VALIDATION_ERROR');
+      expect(response.json<{ error: { code: string } }>().error.code).toBe(
+        'VALIDATION_ERROR',
+      );
     } finally {
       await app.close();
       database.cleanup();
+    }
+  });
+
+  it('returns a safe error envelope for oversized request bodies', async () => {
+    const app = buildApiApp({
+      catalogService: {
+        createCompetition: () => ({ id: 'unused' }),
+      } as unknown as CatalogService,
+    });
+
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/competitions',
+        headers: { 'content-type': 'application/json' },
+        payload: JSON.stringify({ name: 'x'.repeat(300_000) }),
+      });
+
+      expect(response.statusCode).toBe(413);
+      expect(response.json()).toEqual({
+        error: {
+          code: 'REQUEST_BODY_TOO_LARGE',
+          message: 'Request body is too large',
+        },
+      });
+    } finally {
+      await app.close();
     }
   });
 });
