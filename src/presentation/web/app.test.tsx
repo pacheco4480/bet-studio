@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './app';
 
@@ -61,6 +61,7 @@ describe('App', () => {
 
     expect(screen.getByText('Bet Studio')).toBeInTheDocument();
     expect(screen.getByText('Catalog Management')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Bulletins' }));
     expect(await screen.findByText(/Home FC vs Away FC/)).toBeInTheDocument();
     expect(screen.getByText(/Over 2.5 Goals/)).toBeInTheDocument();
   });

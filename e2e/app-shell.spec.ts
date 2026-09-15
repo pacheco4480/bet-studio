@@ -7,5 +7,9 @@ test('loads the Bet Studio shell', async ({ page }) => {
   await expect(
     page.getByRole('heading', { name: 'Catalog Management' }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'bulletins' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Home' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Bulletins' })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Create bulletin' }),
+  ).toBeVisible();
 });

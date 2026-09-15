@@ -217,33 +217,39 @@ type BulletinEvaluationResult = {
 type SettlementStatus = 'PENDING' | 'GREEN' | 'RED' | 'VOID' | 'MANUAL';
 
 type Tab =
+  | 'home'
   | 'bulletins'
   | 'history'
   | 'competitions'
   | 'teams'
   | 'markets'
   | 'fixtures'
-  | 'settlement';
+  | 'guide'
+  | 'settings';
 
 const tabLabels: Record<Tab, string> = {
+  home: 'Home',
   bulletins: 'Bulletins',
   history: 'History',
   competitions: 'Competitions',
   teams: 'Teams',
   markets: 'Markets',
   fixtures: 'Fixtures',
-  settlement: 'Settlement',
+  guide: 'Guide',
+  settings: 'Settings',
 };
 
 const tabDescriptions: Record<Tab, string> = {
+  home: 'Operational overview and quick entry points for the main workflow.',
   bulletins: 'Create, preview, save and export betting bulletins.',
   history: 'Review saved bulletins, results, overrides and rendered PNGs.',
   competitions: 'Manage the competitions used by teams, fixtures and sync.',
   teams: 'Manage teams, aliases and competition links.',
   markets: 'Manage manual and automatically evaluated betting markets.',
   fixtures: 'Refresh provider fixtures for a selected match date.',
-  settlement:
-    'Technical settlement tools for direct selection or bulletin IDs.',
+  guide: 'A short practical guide for using Bet Studio end to end.',
+  settings:
+    'Provider status, render preferences and advanced maintenance tools.',
 };
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -267,7 +273,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 export function App() {
-  const [tab, setTab] = useState<Tab>('bulletins');
+  const [tab, setTab] = useState<Tab>('home');
   const [builderOpenId, setBuilderOpenId] = useState<string | null>(null);
   const clearBuilderOpenId = useCallback(() => setBuilderOpenId(null), []);
   const editBulletinInBuilder = useCallback((id: string) => {
@@ -291,13 +297,15 @@ export function App() {
           <nav className="flex flex-wrap gap-2" aria-label="Catalog sections">
             {(
               [
+                'home',
                 'bulletins',
                 'history',
                 'competitions',
                 'teams',
                 'markets',
                 'fixtures',
-                'settlement',
+                'guide',
+                'settings',
               ] as const
             ).map((item) => (
               <button
@@ -316,6 +324,7 @@ export function App() {
             ))}
           </nav>
         </header>
+        {tab === 'home' && <HomePanel setTab={setTab} />}
         {tab === 'competitions' && <CompetitionsPanel />}
         {tab === 'bulletins' && (
           <BulletinsPanel
@@ -327,9 +336,201 @@ export function App() {
         {tab === 'teams' && <TeamsPanel />}
         {tab === 'markets' && <MarketsPanel />}
         {tab === 'fixtures' && <FixturesPanel />}
-        {tab === 'settlement' && <SettlementPanel />}
+        {tab === 'guide' && <GuidePanel />}
+        {tab === 'settings' && <SettingsPanel />}
       </div>
     </main>
+  );
+}
+
+function HomePanel(props: { setTab: (tab: Tab) => void }) {
+  const [bulletins, setBulletins] = useState<BulletinListItem[]>([]);
+  const [provider, setProvider] = useState<ProviderStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void Promise.all([
+      request<{ items: BulletinListItem[] }>('/api/bulletins'),
+      request<ProviderStatus | null>('/api/providers/goal/status').catch(
+        () => null,
+      ),
+    ])
+      .then(([bulletinResult, providerResult]) => {
+        setBulletins(bulletinResult.items);
+        setProvider(providerResult);
+      })
+      .catch((err: Error) => setError(err.message));
+  }, []);
+
+  const pendingCount = bulletins.filter(
+    (item) => item.status === 'PENDING',
+  ).length;
+  const settledCount = bulletins.filter((item) =>
+    ['GREEN', 'RED', 'VOID'].includes(item.status),
+  ).length;
+
+  return (
+    <CatalogSection title="Home" error={error}>
+      <section className="grid gap-4 md:grid-cols-4">
+        <MetricCard label="Bulletins" value={String(bulletins.length)} />
+        <MetricCard label="Pending" value={String(pendingCount)} />
+        <MetricCard label="Settled" value={String(settledCount)} />
+        <MetricCard
+          label="GOAL API"
+          value={provider?.configured ? 'Ready' : 'Local'}
+        />
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className="grid gap-3 rounded border border-white/10 bg-studio-panel p-4">
+          <div>
+            <h3 className="text-lg font-semibold">Start workflow</h3>
+            <p className="mt-1 text-sm text-slate-400">
+              Build a bulletin, save it, then manage results and exports from
+              History.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded bg-studio-lime px-4 py-2 font-semibold text-black"
+              onClick={() => props.setTab('bulletins')}
+            >
+              Create bulletin
+            </button>
+            <button
+              type="button"
+              className="rounded border border-white/10 px-4 py-2 font-semibold text-slate-200"
+              onClick={() => props.setTab('history')}
+            >
+              Open History
+            </button>
+            <button
+              type="button"
+              className="rounded border border-white/10 px-4 py-2 font-semibold text-slate-200"
+              onClick={() => props.setTab('guide')}
+            >
+              Read guide
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-3 rounded border border-white/10 bg-studio-panel p-4">
+          <h3 className="text-lg font-semibold">Recent bulletins</h3>
+          {bulletins.length === 0 && (
+            <EmptyState
+              title="No saved bulletins"
+              body="Create your first bulletin from the Builder."
+            />
+          )}
+          {bulletins.slice(0, 5).map((item) => (
+            <div
+              key={item.id}
+              className="flex items-center justify-between gap-3 rounded border border-white/10 bg-black/20 p-3"
+            >
+              <div>
+                <p className="font-semibold">{item.publicCode}</p>
+                <p className="text-sm text-slate-400">
+                  {item.type} | {item.selectionCount} selections |{' '}
+                  {item.totalOdd ?? 'No odd'}
+                </p>
+              </div>
+              <StatusBadge status={item.status} />
+            </div>
+          ))}
+        </div>
+      </section>
+    </CatalogSection>
+  );
+}
+
+function GuidePanel() {
+  const steps = [
+    [
+      'Prepare data',
+      'Create local competitions, teams and markets, or configure GOAL API and sync only the competitions you need.',
+    ],
+    [
+      'Create bulletin',
+      'Use Bulletins to choose SINGLE or MULTI, add fixtures, markets, odds and stake.',
+    ],
+    [
+      'Save and export',
+      'Save the bulletin before exporting PNG. The FEED render is stored in render history.',
+    ],
+    [
+      'Settle results',
+      'Use History to refresh provider results or enter scores manually, then re-evaluate selections.',
+    ],
+    [
+      'Review history',
+      'History keeps saved snapshots, manual overrides, evaluation events and previous renders.',
+    ],
+  ];
+
+  return (
+    <CatalogSection title="Guide" error={null}>
+      <section className="grid gap-3 rounded border border-white/10 bg-studio-panel p-4">
+        {steps.map(([title, body], index) => (
+          <article
+            key={title}
+            className="grid gap-1 border-b border-white/10 pb-3 last:border-b-0 last:pb-0"
+          >
+            <p className="text-sm font-semibold text-studio-lime">
+              {String(index + 1).padStart(2, '0')}
+            </p>
+            <h3 className="text-lg font-semibold">{title}</h3>
+            <p className="text-sm text-slate-400">{body}</p>
+          </article>
+        ))}
+      </section>
+    </CatalogSection>
+  );
+}
+
+function MetricCard(props: { label: string; value: string }) {
+  return (
+    <article className="rounded border border-white/10 bg-studio-panel p-4">
+      <p className="text-sm text-slate-400">{props.label}</p>
+      <strong className="mt-2 block text-2xl text-white">{props.value}</strong>
+    </article>
+  );
+}
+
+function SettingsPanel() {
+  return (
+    <CatalogSection title="Settings" error={null}>
+      <ProviderStatusCard />
+      <details className="rounded border border-white/10 bg-studio-panel p-4">
+        <summary className="cursor-pointer font-semibold">
+          Advanced settlement tools
+        </summary>
+        <div className="mt-4">
+          <SettlementPanel />
+        </div>
+      </details>
+    </CatalogSection>
+  );
+}
+
+function ProviderStatusCard() {
+  const [provider, setProvider] = useState<ProviderStatus | null>(null);
+
+  useEffect(() => {
+    void request<ProviderStatus | null>('/api/providers/goal/status')
+      .then(setProvider)
+      .catch(() => setProvider(null));
+  }, []);
+
+  return (
+    <section className="rounded border border-white/10 bg-studio-panel p-4">
+      <h3 className="font-semibold">GOAL API</h3>
+      <p className="mt-1 text-sm text-slate-400">
+        {provider?.configured
+          ? `Configured${provider.lastSuccessfulSyncAt ? ` | Last sync ${provider.lastSuccessfulSyncAt}` : ''}`
+          : 'Not configured. Add GOAL_API_KEY to .env to enable provider synchronization.'}
+      </p>
+    </section>
   );
 }
 
@@ -655,18 +856,25 @@ function BulletinsPanel(props: {
           Show old and finished fixtures
         </label>
       </section>
-      <CreateFixtureForm
-        teams={teams}
-        competitions={competitions}
-        onCreated={async (fixture) => {
-          await load();
-          setDraft((current) => ({
-            ...current,
-            selections: assignFixtureToDraftSelections(current, fixture),
-          }));
-          setSaveState('Unsaved');
-        }}
-      />
+      <details className="rounded border border-white/10 bg-studio-panel p-4">
+        <summary className="cursor-pointer font-semibold">
+          Create local fixture
+        </summary>
+        <div className="mt-4">
+          <CreateFixtureForm
+            teams={teams}
+            competitions={competitions}
+            onCreated={async (fixture) => {
+              await load();
+              setDraft((current) => ({
+                ...current,
+                selections: assignFixtureToDraftSelections(current, fixture),
+              }));
+              setSaveState('Unsaved');
+            }}
+          />
+        </div>
+      </details>
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
         <div className="grid gap-3">
           <div className="flex items-center justify-between gap-3 text-sm text-slate-400">
@@ -887,8 +1095,7 @@ function CreateFixtureForm(props: {
   }, [availableTeams, awayTeamId, homeTeamId]);
 
   return (
-    <section className="grid gap-4 rounded border border-white/10 bg-studio-panel p-4">
-      <h3 className="font-semibold">Create local fixture</h3>
+    <section className="grid gap-4">
       <div className="grid gap-3 md:grid-cols-5">
         <label className="text-sm text-slate-300">
           Competition
@@ -2269,41 +2476,81 @@ function TeamsPanel() {
           />
         )}
         {groupedTeams.map(([competitionName, teams]) => (
-          <section key={competitionName} className="grid gap-3">
-            <div className="flex items-baseline justify-between border-b border-white/10 pb-2">
-              <h3 className="text-lg font-semibold">{competitionName}</h3>
-              <span className="text-sm text-slate-500">
-                {teams.length} {teams.length === 1 ? 'team' : 'teams'}
-              </span>
+          <details
+            key={competitionName}
+            className="grid gap-3 rounded border border-white/10 bg-studio-panel p-4"
+          >
+            <summary className="cursor-pointer">
+              <div className="inline-flex w-[calc(100%-1.5rem)] items-baseline justify-between gap-3">
+                <h3 className="text-lg font-semibold">{competitionName}</h3>
+                <span className="text-sm text-slate-500">
+                  {teams.length} {teams.length === 1 ? 'team' : 'teams'}
+                </span>
+              </div>
+            </summary>
+            <div className="mt-3 grid gap-3">
+              {teams.map((item) => (
+                <TeamCard
+                  key={`${competitionName}-${item.id}`}
+                  team={item}
+                  onEdit={() => setEditing(item)}
+                  onToggle={() =>
+                    void request(`/api/teams/${item.id}`, {
+                      method: 'PATCH',
+                      body: JSON.stringify({ active: !item.active }),
+                    }).then(load)
+                  }
+                  onRemoveAlias={(aliasId) =>
+                    void request(`/api/teams/${item.id}/aliases/${aliasId}`, {
+                      method: 'DELETE',
+                    }).then(load)
+                  }
+                  onRemoveCompetition={(competitionId) =>
+                    void request(
+                      `/api/teams/${item.id}/competitions/${competitionId}`,
+                      { method: 'DELETE' },
+                    ).then(load)
+                  }
+                />
+              ))}
             </div>
-            {teams.map((item) => (
-              <TeamCard
-                key={`${competitionName}-${item.id}`}
-                team={item}
-                onEdit={() => setEditing(item)}
-                onToggle={() =>
-                  void request(`/api/teams/${item.id}`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ active: !item.active }),
-                  }).then(load)
-                }
-                onRemoveAlias={(aliasId) =>
-                  void request(`/api/teams/${item.id}/aliases/${aliasId}`, {
-                    method: 'DELETE',
-                  }).then(load)
-                }
-                onRemoveCompetition={(competitionId) =>
-                  void request(
-                    `/api/teams/${item.id}/competitions/${competitionId}`,
-                    { method: 'DELETE' },
-                  ).then(load)
-                }
-              />
-            ))}
-          </section>
+          </details>
         ))}
       </div>
     </CatalogSection>
+  );
+}
+
+function MarketCategoryGroup(props: {
+  category: string;
+  markets: Market[];
+  onEdit: (market: Market) => void;
+  onToggle: (market: Market) => void;
+}) {
+  return (
+    <details className="rounded border border-white/10 bg-studio-panel p-4">
+      <summary className="cursor-pointer">
+        <div className="inline-flex w-[calc(100%-1.5rem)] items-baseline justify-between gap-3">
+          <h3 className="text-lg font-semibold">{props.category}</h3>
+          <span className="text-sm text-slate-500">
+            {props.markets.length}{' '}
+            {props.markets.length === 1 ? 'market' : 'markets'}
+          </span>
+        </div>
+      </summary>
+      <div className="mt-3 grid gap-3">
+        {props.markets.map((item) => (
+          <CatalogCard
+            key={item.id}
+            title={item.name}
+            subtitle={`${item.code} | ${item.autoEvaluable ? item.evaluatorKey : 'Manual'}`}
+            active={item.active}
+            onEdit={() => props.onEdit(item)}
+            onToggle={() => props.onToggle(item)}
+          />
+        ))}
+      </div>
+    </details>
   );
 }
 
@@ -2381,6 +2628,18 @@ function MarketsPanel() {
   const [active, setActive] = useState('all');
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<Market | null>(null);
+  const marketGroups = useMemo(() => {
+    const groups = new Map<string, Market[]>();
+    for (const market of items) {
+      const category = market.category || 'Uncategorized';
+      const group = groups.get(category) ?? [];
+      group.push(market);
+      groups.set(category, group);
+    }
+    return [...groups.entries()].sort(([left], [right]) =>
+      left.localeCompare(right),
+    );
+  }, [items]);
   const load = useCallback(
     async () =>
       setItems(
@@ -2417,17 +2676,16 @@ function MarketsPanel() {
             body="Create a market manually or run database migrations to seed the default market catalog."
           />
         )}
-        {items.map((item) => (
-          <CatalogCard
-            key={item.id}
-            title={item.name}
-            subtitle={`${item.code} | ${item.autoEvaluable ? item.evaluatorKey : 'Manual'}`}
-            active={item.active}
-            onEdit={() => setEditing(item)}
-            onToggle={() =>
-              void request(`/api/markets/${item.id}`, {
+        {marketGroups.map(([category, markets]) => (
+          <MarketCategoryGroup
+            key={category}
+            category={category}
+            markets={markets}
+            onEdit={setEditing}
+            onToggle={(market) =>
+              void request(`/api/markets/${market.id}`, {
                 method: 'PATCH',
-                body: JSON.stringify({ active: !item.active }),
+                body: JSON.stringify({ active: !market.active }),
               }).then(load)
             }
           />

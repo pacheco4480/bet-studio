@@ -17,3 +17,8 @@
 body {
   margin: 0;
 }
+
+select option {
+  background: #0b1018;
+  color: #f8fafc;
+}
