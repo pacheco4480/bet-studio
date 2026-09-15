@@ -159,6 +159,8 @@ export type BulletinRenderConfig = {
   showTotalOdd: boolean;
   showResult: boolean;
   showBulletinCode: boolean;
+  showTeamLogos?: boolean;
+  templateTheme?: 'LIME' | 'ELECTRIC' | 'MONO';
 };
 
 export type Bulletin = {

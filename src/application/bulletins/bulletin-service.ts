@@ -96,6 +96,8 @@ const displayOptionsSchema = z
     showTotalOdd: z.boolean(),
     showResult: z.boolean(),
     showBulletinCode: z.boolean(),
+    showTeamLogos: z.boolean(),
+    templateTheme: z.enum(['LIME', 'ELECTRIC', 'MONO']),
   })
   .partial();
 
@@ -140,6 +142,8 @@ const defaultRenderConfig: BulletinRenderConfig = {
   showTotalOdd: true,
   showResult: true,
   showBulletinCode: true,
+  showTeamLogos: true,
+  templateTheme: 'LIME',
 };
 
 export class BulletinService {

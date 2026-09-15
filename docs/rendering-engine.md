@@ -156,6 +156,8 @@ type RenderBulletinModel = {
     showTotalOdd: boolean;
     showResult: boolean;
     showBulletinCode: boolean;
+    showTeamLogos?: boolean;
+    templateTheme?: 'LIME' | 'ELECTRIC' | 'MONO';
   };
 };
 6. Render Selection Model
@@ -768,6 +770,8 @@ showStake
 showTotalOdd
 showResult
 showBulletinCode
+showTeamLogos
+templateTheme
 
 Hiding an optional field must follow template-defined behavior.
 

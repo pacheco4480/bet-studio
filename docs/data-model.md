@@ -607,6 +607,8 @@ type BulletinRenderConfig = {
   showTotalOdd: boolean;
   showResult: boolean;
   showBulletinCode: boolean;
+  showTeamLogos?: boolean;
+  templateTheme?: 'LIME' | 'ELECTRIC' | 'MONO';
 };
 
 Do not store calculated layout coordinates here unless they are intentionally part of a persisted rendering contract.

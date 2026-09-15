@@ -197,6 +197,43 @@ describe('rendering', () => {
     expect(renderer.lastModel?.selections[0]?.resultText).toBe('2-1');
   });
 
+  it('preserves template theme and team logo display config in render model', async () => {
+    database = createMigratedTestDatabase();
+    const bulletinRepository = new DrizzleBulletinBuilderRepository(
+      database.db,
+    );
+    const renderer = new FakeRenderer();
+    const service = new RenderingService(
+      bulletinRepository,
+      new MemoryRenderRecordRepository(),
+      renderer,
+      dirname(database.path),
+    );
+    const bulletinService = new BulletinService(bulletinRepository);
+    const seed = seedCatalog(database);
+
+    const bulletin = bulletinService.createBulletin({
+      type: 'SINGLE',
+      mode: 'PRE_MATCH',
+      renderConfig: {
+        showTeamLogos: false,
+        templateTheme: 'ELECTRIC',
+      },
+      selections: [
+        {
+          fixtureId: seed.fixture.id,
+          marketId: seed.market.id,
+          odd: '2.00',
+        },
+      ],
+    });
+
+    await service.renderBulletin(bulletin.bulletin.id);
+
+    expect(renderer.lastModel?.display.showTeamLogos).toBe(false);
+    expect(renderer.lastModel?.display.templateTheme).toBe('ELECTRIC');
+  });
+
   it('refuses to read render files outside the configured export directory', async () => {
     database = createMigratedTestDatabase();
     const recordRepository = new MemoryRenderRecordRepository();

@@ -16,6 +16,7 @@ It combines structured football data, deterministic market settlement, versioned
 - Manual result entry and manual settlement overrides.
 - History view with result management, audit timeline, duplicate/edit actions and render history.
 - Deterministic FEED PNG export at `1080 x 1350`.
+- Saved FEED theme variants and optional team-logo/initial display.
 - Historical snapshots so saved bulletins and renders do not silently change when catalog data changes later.
 
 ## Tech Stack
@@ -153,6 +154,8 @@ PNG
 ```
 
 Rendering uses structured saved bulletin data, frozen snapshots, versioned templates and local assets. Playwright Chromium is used to render and export the final PNG. Historical render records are kept separately, so a new export does not overwrite old render metadata.
+
+The Builder currently exposes three deterministic FEED themes: `LIME`, `ELECTRIC` and `MONO`. Team logo display can be toggled per bulletin; until safe provider asset caching is implemented, missing logos render as deterministic team initials.
 
 Story `1080 x 1920` rendering is future scope.
 

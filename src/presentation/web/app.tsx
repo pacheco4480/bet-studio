@@ -77,10 +77,12 @@ type BulletinDto = {
     status: string;
     stake: string | null;
     totalOdd: string | null;
-    renderConfig: Record<string, boolean>;
+    renderConfig: Record<string, boolean | string>;
   };
   selections: BulletinSelectionDto[];
 };
+
+type RenderTheme = 'LIME' | 'ELECTRIC' | 'MONO';
 
 type BulletinListItem = {
   id: string;
@@ -595,9 +597,33 @@ type BulletinDraft = {
   type: 'SINGLE' | 'MULTI';
   mode: 'PRE_MATCH' | 'LIVE';
   stake: string;
-  renderConfig: Record<string, boolean>;
+  renderConfig: Record<string, boolean | string>;
   selections: DraftSelection[];
 };
+
+const renderToggleLabels: Array<[string, string]> = [
+  ['showCompetition', 'Competition'],
+  ['showDate', 'Date'],
+  ['showTime', 'Time'],
+  ['showStake', 'Stake'],
+  ['showTotalOdd', 'Total odd'],
+  ['showResult', 'Selection status'],
+  ['showBulletinCode', 'Bulletin code'],
+  ['showTeamLogos', 'Team logos'],
+];
+
+function renderToggleValue(
+  config: BulletinDraft['renderConfig'],
+  key: string,
+): boolean {
+  const value = config[key];
+  return typeof value === 'boolean' ? value : true;
+}
+
+function renderThemeValue(config: BulletinDraft['renderConfig']): RenderTheme {
+  const value = config.templateTheme;
+  return value === 'ELECTRIC' || value === 'MONO' ? value : 'LIME';
+}
 
 const defaultDraft: BulletinDraft = {
   type: 'SINGLE',
@@ -611,6 +637,8 @@ const defaultDraft: BulletinDraft = {
     showTotalOdd: true,
     showResult: true,
     showBulletinCode: true,
+    showTeamLogos: true,
+    templateTheme: 'LIME',
   },
   selections: [{ fixtureId: '', marketId: '', odd: '1.50' }],
 };
@@ -749,6 +777,11 @@ function BulletinsPanel(props: {
       setError('Save the bulletin before exporting PNG');
       return;
     }
+    if (saveState === 'Unsaved') {
+      setError('Save the latest template/settings before exporting PNG');
+      setRenderState('Save required before export');
+      return;
+    }
     setError(null);
     setRenderState('Rendering');
     const result = await request<RenderResult>(
@@ -815,29 +848,54 @@ function BulletinsPanel(props: {
             <strong className="text-xl text-white">{totalOdd}</strong>
           </div>
         </div>
-        <div className="flex flex-wrap gap-3">
-          {Object.keys(defaultDraft.renderConfig).map((key) => (
-            <label
-              key={key}
-              className="flex items-center gap-2 text-sm text-slate-300"
+        <div className="grid gap-3 md:grid-cols-[220px_1fr]">
+          <label className="text-sm text-slate-300">
+            Template
+            <select
+              className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-white"
+              value={
+                (draft.renderConfig.templateTheme as RenderTheme) ?? 'LIME'
+              }
+              onChange={(event) => {
+                setDraft({
+                  ...draft,
+                  renderConfig: {
+                    ...draft.renderConfig,
+                    templateTheme: event.target.value,
+                  },
+                });
+                setSaveState('Unsaved');
+              }}
             >
-              <input
-                type="checkbox"
-                checked={draft.renderConfig[key] ?? true}
-                onChange={(event) => {
-                  setDraft({
-                    ...draft,
-                    renderConfig: {
-                      ...draft.renderConfig,
-                      [key]: event.target.checked,
-                    },
-                  });
-                  setSaveState('Unsaved');
-                }}
-              />
-              {key}
-            </label>
-          ))}
+              <option value="LIME">Bet Studio Lime</option>
+              <option value="ELECTRIC">Electric Night</option>
+              <option value="MONO">Mono Slate</option>
+            </select>
+          </label>
+          <div className="flex flex-wrap gap-3">
+            {renderToggleLabels.map(([key, label]) => (
+              <label
+                key={key}
+                className="flex items-center gap-2 text-sm text-slate-300"
+              >
+                <input
+                  type="checkbox"
+                  checked={renderToggleValue(draft.renderConfig, key)}
+                  onChange={(event) => {
+                    setDraft({
+                      ...draft,
+                      renderConfig: {
+                        ...draft.renderConfig,
+                        [key]: event.target.checked,
+                      },
+                    });
+                    setSaveState('Unsaved');
+                  }}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
         </div>
       </section>
       <section className="flex flex-wrap items-center justify-between gap-3 rounded border border-white/10 bg-black/20 p-3">
@@ -984,7 +1042,14 @@ function BulletinsPanel(props: {
         </button>
         <button
           type="button"
-          disabled={!draft.id || renderState === 'Rendering'}
+          disabled={
+            !draft.id || renderState === 'Rendering' || saveState === 'Unsaved'
+          }
+          title={
+            saveState === 'Unsaved'
+              ? 'Save the latest template/settings before exporting PNG.'
+              : 'Export the saved bulletin as a PNG.'
+          }
           className="rounded border border-studio-lime px-4 py-2 font-semibold text-studio-lime disabled:cursor-not-allowed disabled:border-white/10 disabled:text-slate-500"
           onClick={() =>
             void renderSavedBulletin().catch((err: Error) => {
@@ -1334,6 +1399,12 @@ function BulletinPreview(props: {
 }) {
   const code = props.saved?.bulletin.publicCode ?? 'Unsaved';
   const status = props.saved?.bulletin.status ?? 'PENDING';
+  const theme = renderThemeValue(props.draft.renderConfig);
+  const themeClasses = previewThemeClasses(theme);
+  const showTeamLogos = renderToggleValue(
+    props.draft.renderConfig,
+    'showTeamLogos',
+  );
   const selections =
     props.saved?.selections ??
     props.draft.selections.map((selection, index) => {
@@ -1367,11 +1438,15 @@ function BulletinPreview(props: {
     });
 
   return (
-    <aside className="grid content-start gap-3 rounded border border-white/10 bg-black/30 p-4">
+    <aside
+      className={`grid content-start gap-3 rounded border p-4 ${themeClasses.shell}`}
+    >
       <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
         <div>
           {props.draft.renderConfig.showBulletinCode && (
-            <p className="text-sm text-studio-lime">{code}</p>
+            <p className={`text-sm font-semibold ${themeClasses.accentText}`}>
+              {code}
+            </p>
           )}
           <h3 className="text-xl font-bold">
             {props.draft.type} | {props.draft.mode}
@@ -1383,7 +1458,7 @@ function BulletinPreview(props: {
         {selections.map((item) => (
           <article
             key={item.selection.id}
-            className="grid gap-2 rounded border border-white/10 bg-studio-panel p-3"
+            className={`grid gap-2 rounded border p-3 ${themeClasses.card}`}
           >
             <div className="flex justify-between gap-3 text-sm text-slate-400">
               {props.draft.renderConfig.showCompetition && (
@@ -1393,9 +1468,23 @@ function BulletinPreview(props: {
                 <span>{item.effectiveStatus}</span>
               )}
             </div>
-            <p className="font-semibold">
-              {item.snapshot.homeTeamName} vs {item.snapshot.awayTeamName}
-            </p>
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+              <PreviewTeam
+                name={item.snapshot.homeTeamName}
+                showLogo={showTeamLogos}
+                themeClasses={themeClasses}
+                align="home"
+              />
+              <span className="text-xs font-black uppercase text-slate-400">
+                vs
+              </span>
+              <PreviewTeam
+                name={item.snapshot.awayTeamName}
+                showLogo={showTeamLogos}
+                themeClasses={themeClasses}
+                align="away"
+              />
+            </div>
             <p className="text-sm text-slate-300">{item.snapshot.marketName}</p>
             <div className="flex justify-between gap-3 text-sm">
               <span>Odd {item.selection.odd}</span>
@@ -1425,6 +1514,88 @@ function BulletinPreview(props: {
       </div>
     </aside>
   );
+}
+
+function previewThemeClasses(theme: RenderTheme) {
+  if (theme === 'ELECTRIC') {
+    return {
+      shell:
+        'border-cyan-300/25 bg-indigo-950/35 shadow-[0_0_30px_rgba(34,211,238,0.08)]',
+      card: 'border-cyan-300/20 bg-indigo-950/50',
+      accentText: 'text-cyan-200',
+      logo: 'border-cyan-300/30 bg-slate-950 text-cyan-200',
+    };
+  }
+  if (theme === 'MONO') {
+    return {
+      shell: 'border-zinc-400/20 bg-zinc-950/45',
+      card: 'border-zinc-500/20 bg-zinc-900/70',
+      accentText: 'text-zinc-200',
+      logo: 'border-zinc-400/30 bg-black text-zinc-100',
+    };
+  }
+  return {
+    shell: 'border-white/10 bg-black/30',
+    card: 'border-white/10 bg-studio-panel',
+    accentText: 'text-studio-lime',
+    logo: 'border-white/10 bg-black text-studio-lime',
+  };
+}
+
+function PreviewTeam(props: {
+  name: string;
+  showLogo: boolean;
+  themeClasses: ReturnType<typeof previewThemeClasses>;
+  align: 'home' | 'away';
+}) {
+  const textAlign = props.align === 'home' ? 'text-right' : 'text-left';
+  const content =
+    props.align === 'home' ? (
+      <>
+        <span className={`min-w-0 truncate font-semibold ${textAlign}`}>
+          {props.name}
+        </span>
+        {props.showLogo && (
+          <span
+            className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border text-xs font-black ${props.themeClasses.logo}`}
+          >
+            {teamInitials(props.name)}
+          </span>
+        )}
+      </>
+    ) : (
+      <>
+        {props.showLogo && (
+          <span
+            className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border text-xs font-black ${props.themeClasses.logo}`}
+          >
+            {teamInitials(props.name)}
+          </span>
+        )}
+        <span className={`min-w-0 truncate font-semibold ${textAlign}`}>
+          {props.name}
+        </span>
+      </>
+    );
+
+  return (
+    <div
+      className={`flex min-w-0 items-center gap-2 ${
+        props.align === 'home' ? 'justify-end' : 'justify-start'
+      }`}
+    >
+      {content}
+    </div>
+  );
+}
+
+function teamInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
 }
 
 function fromBulletin(input: BulletinDto): BulletinDraft {
