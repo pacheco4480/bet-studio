@@ -441,7 +441,26 @@ Deleting historical records should require explicit confirmation.
 
 ---
 
-## 13. Settings
+## 13. Analytics
+
+The application may expose local analytics derived from saved bulletins,
+selections and settlement state.
+
+Initial analytics should include:
+
+- Bulletin and selection totals.
+- Status breakdowns.
+- Win rates for settled GREEN/RED records.
+- Basic realized stake/return/profit where saved stake and final status are
+  available.
+- Breakdown by market and competition.
+
+Analytics must not infer or predict future results. Pending and manual records
+must remain visibly separate from realized performance.
+
+---
+
+## 14. Settings
 
 Initial settings areas:
 
@@ -463,7 +482,7 @@ Secrets must never be displayed in full after storage.
 
 ---
 
-## 14. Error Handling
+## 15. Error Handling
 
 The application must fail safely.
 
@@ -481,7 +500,7 @@ The system must never invent football results or settlement outcomes.
 
 ---
 
-## 15. Local-First Constraints
+## 16. Local-First Constraints
 
 Initial deployment model:
 
@@ -498,7 +517,7 @@ Future migration must remain possible without rewriting domain logic.
 
 ---
 
-## 16. Quality Requirements
+## 17. Quality Requirements
 
 Required:
 
@@ -519,7 +538,7 @@ Core business rules must be testable without UI or network access.
 
 ---
 
-## 17. Product Principles
+## 18. Product Principles
 
 Priority order:
 

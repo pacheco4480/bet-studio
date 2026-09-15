@@ -1,6 +1,7 @@
 // @vitest-environment node
 
 import { describe, expect, it } from 'vitest';
+import type { AnalyticsService } from '../../application/analytics/analytics-service.js';
 import type { BulletinService } from '../../application/bulletins/bulletin-service.js';
 import { CatalogService } from '../../application/catalog/catalog-service.js';
 import type { HistoryService } from '../../application/history/history-service.js';
@@ -24,6 +25,54 @@ describe('Bet Studio API health endpoint', () => {
     expect(response.json()).toEqual({ status: 'ok' });
 
     await app.close();
+  });
+});
+
+describe('Bet Studio analytics API', () => {
+  it('exposes the local analytics summary', async () => {
+    const app = buildApiApp({
+      analyticsService: {
+        getSummary: () => ({
+          totals: {
+            bulletins: 1,
+            selections: 1,
+            settledBulletins: 1,
+            pendingBulletins: 0,
+            greenBulletins: 1,
+            redBulletins: 0,
+            voidBulletins: 0,
+            manualBulletins: 0,
+          },
+          performance: {
+            bulletinWinRate: '100.0%',
+            selectionWinRate: '100.0%',
+            totalStake: '10.00',
+            realizedReturn: '20.00',
+            realizedProfit: '10.00',
+            averageOdd: '2.00',
+          },
+          byStatus: [{ status: 'GREEN', count: 1 }],
+          byType: [{ type: 'SINGLE', count: 1 }],
+          byMode: [{ mode: 'PRE_MATCH', count: 1 }],
+          byMarket: [],
+          byCompetition: [],
+        }),
+      } as unknown as AnalyticsService,
+    });
+
+    try {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/analytics/summary',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json<{ totals: { bulletins: number } }>().totals).toEqual(
+        expect.objectContaining({ bulletins: 1 }),
+      );
+    } finally {
+      await app.close();
+    }
   });
 });
 

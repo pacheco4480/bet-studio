@@ -54,6 +54,49 @@ describe('App', () => {
           }),
         );
       }
+      if (url.startsWith('/api/analytics/summary')) {
+        return Promise.resolve(
+          response({
+            totals: {
+              bulletins: 2,
+              selections: 3,
+              settledBulletins: 1,
+              pendingBulletins: 1,
+              greenBulletins: 1,
+              redBulletins: 0,
+              voidBulletins: 0,
+              manualBulletins: 0,
+            },
+            performance: {
+              bulletinWinRate: '100.0%',
+              selectionWinRate: '50.0%',
+              totalStake: '10.00',
+              realizedReturn: '20.00',
+              realizedProfit: '10.00',
+              averageOdd: '1.80',
+            },
+            byStatus: [
+              { status: 'PENDING', count: 1 },
+              { status: 'GREEN', count: 1 },
+            ],
+            byType: [{ type: 'SINGLE', count: 2 }],
+            byMode: [{ mode: 'PRE_MATCH', count: 2 }],
+            byMarket: [
+              {
+                label: 'Over 2.5 Goals',
+                total: 2,
+                green: 1,
+                red: 1,
+                pending: 0,
+                manual: 0,
+                void: 0,
+                winRate: '50.0%',
+              },
+            ],
+            byCompetition: [],
+          }),
+        );
+      }
       return Promise.resolve(response({ items: [] }));
     });
 
@@ -64,6 +107,9 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Bulletins' }));
     expect(await screen.findByText(/Home FC vs Away FC/)).toBeInTheDocument();
     expect(screen.getByText(/Over 2.5 Goals/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Analytics' }));
+    expect(await screen.findByText('Realized profit')).toBeInTheDocument();
+    expect(screen.getByText('100.0%')).toBeInTheDocument();
   });
 });
 

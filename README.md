@@ -161,6 +161,18 @@ Story `1080 x 1920` rendering is future scope.
 
 See [docs/rendering-engine.md](docs/rendering-engine.md).
 
+## Analytics
+
+The Analytics tab summarizes saved local data:
+
+- Bulletin and selection totals.
+- GREEN/RED/PENDING/VOID/MANUAL breakdowns.
+- Bulletin and selection win rates.
+- Settled stake, realized return and realized profit for GREEN/RED/VOID bulletins with valid stake.
+- Top markets and competitions by saved selections.
+
+Pending and manual bulletins are excluded from realized financial performance.
+
 ## Testing
 
 Common quality commands:

@@ -1,4 +1,5 @@
 import { BulletinService } from '../../application/bulletins/bulletin-service.js';
+import { AnalyticsService } from '../../application/analytics/analytics-service.js';
 import { HistoryService } from '../../application/history/history-service.js';
 import { buildApiApp } from './app.js';
 import { loadServerEnv } from '../../shared/config/server-env.js';
@@ -9,6 +10,7 @@ import { SynchronizationService } from '../../application/synchronization/synchr
 import { openDatabase } from '../../infrastructure/database/connection.js';
 import { DrizzleBulletinRepository } from '../../infrastructure/database/repositories/bulletin-repository.js';
 import { DrizzleBulletinBuilderRepository } from '../../infrastructure/database/repositories/bulletin-builder-repository.js';
+import { DrizzleAnalyticsRepository } from '../../infrastructure/database/repositories/analytics-repository.js';
 import { DrizzleCatalogRepository } from '../../infrastructure/database/repositories/catalog-repository.js';
 import { DrizzleFixtureRepository } from '../../infrastructure/database/repositories/fixture-repository.js';
 import { DrizzleHistoryRepository } from '../../infrastructure/database/repositories/history-repository.js';
@@ -34,6 +36,9 @@ const goalApiProvider = env.GOAL_API_KEY
   : null;
 const bulletinRepository = new DrizzleBulletinBuilderRepository(database.db);
 const app = buildApiApp({
+  analyticsService: new AnalyticsService(
+    new DrizzleAnalyticsRepository(database.db),
+  ),
   bulletinService: new BulletinService(bulletinRepository),
   historyService: new HistoryService(new DrizzleHistoryRepository(database.db)),
   renderingService: new RenderingService(

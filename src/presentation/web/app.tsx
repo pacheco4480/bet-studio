@@ -1,4 +1,11 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  FormEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 
 type Competition = {
   id: string;
@@ -218,8 +225,46 @@ type BulletinEvaluationResult = {
 
 type SettlementStatus = 'PENDING' | 'GREEN' | 'RED' | 'VOID' | 'MANUAL';
 
+type AnalyticsBreakdownItem = {
+  label: string;
+  total: number;
+  green: number;
+  red: number;
+  pending: number;
+  manual: number;
+  void: number;
+  winRate: string;
+};
+
+type AnalyticsSummary = {
+  totals: {
+    bulletins: number;
+    selections: number;
+    settledBulletins: number;
+    pendingBulletins: number;
+    greenBulletins: number;
+    redBulletins: number;
+    voidBulletins: number;
+    manualBulletins: number;
+  };
+  performance: {
+    bulletinWinRate: string;
+    selectionWinRate: string;
+    totalStake: string;
+    realizedReturn: string;
+    realizedProfit: string;
+    averageOdd: string;
+  };
+  byStatus: Array<{ status: SettlementStatus; count: number }>;
+  byType: Array<{ type: 'SINGLE' | 'MULTI'; count: number }>;
+  byMode: Array<{ mode: 'PRE_MATCH' | 'LIVE'; count: number }>;
+  byMarket: AnalyticsBreakdownItem[];
+  byCompetition: AnalyticsBreakdownItem[];
+};
+
 type Tab =
   | 'home'
+  | 'analytics'
   | 'bulletins'
   | 'history'
   | 'competitions'
@@ -231,6 +276,7 @@ type Tab =
 
 const tabLabels: Record<Tab, string> = {
   home: 'Home',
+  analytics: 'Analytics',
   bulletins: 'Bulletins',
   history: 'History',
   competitions: 'Competitions',
@@ -243,6 +289,7 @@ const tabLabels: Record<Tab, string> = {
 
 const tabDescriptions: Record<Tab, string> = {
   home: 'Operational overview and quick entry points for the main workflow.',
+  analytics: 'Simple local performance analytics for saved bulletins.',
   bulletins: 'Create, preview, save and export betting bulletins.',
   history: 'Review saved bulletins, results, overrides and rendered PNGs.',
   competitions: 'Manage the competitions used by teams, fixtures and sync.',
@@ -300,6 +347,7 @@ export function App() {
             {(
               [
                 'home',
+                'analytics',
                 'bulletins',
                 'history',
                 'competitions',
@@ -327,6 +375,7 @@ export function App() {
           </nav>
         </header>
         {tab === 'home' && <HomePanel setTab={setTab} />}
+        {tab === 'analytics' && <AnalyticsPanel />}
         {tab === 'competitions' && <CompetitionsPanel />}
         {tab === 'bulletins' && (
           <BulletinsPanel
@@ -443,6 +492,194 @@ function HomePanel(props: { setTab: (tab: Tab) => void }) {
         </div>
       </section>
     </CatalogSection>
+  );
+}
+
+function AnalyticsPanel() {
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void request<AnalyticsSummary>('/api/analytics/summary')
+      .then(setSummary)
+      .catch((err: Error) => setError(err.message));
+  }, []);
+
+  return (
+    <CatalogSection title="Analytics" error={error}>
+      {!summary && !error && (
+        <p className="text-sm text-slate-400">Loading analytics...</p>
+      )}
+      {summary && (
+        <>
+          <section className="grid gap-4 md:grid-cols-4">
+            <MetricCard
+              label="Bulletins"
+              value={String(summary.totals.bulletins)}
+            />
+            <MetricCard
+              label="Settled"
+              value={String(summary.totals.settledBulletins)}
+            />
+            <MetricCard
+              label="Bulletin win rate"
+              value={summary.performance.bulletinWinRate}
+            />
+            <MetricCard
+              label="Realized profit"
+              value={summary.performance.realizedProfit}
+            />
+          </section>
+
+          <section className="grid gap-4 lg:grid-cols-3">
+            <AnalyticsCard title="Performance">
+              <AnalyticsStat
+                label="Selection win rate"
+                value={summary.performance.selectionWinRate}
+              />
+              <AnalyticsStat
+                label="Average odd"
+                value={summary.performance.averageOdd}
+              />
+              <AnalyticsStat
+                label="Total settled stake"
+                value={summary.performance.totalStake}
+              />
+              <AnalyticsStat
+                label="Realized return"
+                value={summary.performance.realizedReturn}
+              />
+            </AnalyticsCard>
+
+            <AnalyticsCard title="Bulletin status">
+              {summary.byStatus.map((item) => (
+                <AnalyticsBar
+                  key={item.status}
+                  label={item.status}
+                  value={item.count}
+                  max={summary.totals.bulletins}
+                />
+              ))}
+            </AnalyticsCard>
+
+            <AnalyticsCard title="Format mix">
+              {summary.byType.map((item) => (
+                <AnalyticsBar
+                  key={item.type}
+                  label={item.type}
+                  value={item.count}
+                  max={summary.totals.bulletins}
+                />
+              ))}
+              {summary.byMode.map((item) => (
+                <AnalyticsBar
+                  key={item.mode}
+                  label={item.mode}
+                  value={item.count}
+                  max={summary.totals.bulletins}
+                />
+              ))}
+            </AnalyticsCard>
+          </section>
+
+          <section className="grid gap-4 xl:grid-cols-2">
+            <BreakdownTable title="Markets" items={summary.byMarket} />
+            <BreakdownTable
+              title="Competitions"
+              items={summary.byCompetition}
+            />
+          </section>
+
+          <p className="text-xs text-slate-500">
+            Profit only uses saved bulletins with settled GREEN, RED or VOID
+            status and a valid stake. Pending and manual bulletins stay outside
+            realized performance.
+          </p>
+        </>
+      )}
+    </CatalogSection>
+  );
+}
+
+function AnalyticsCard(props: { title: string; children: ReactNode }) {
+  return (
+    <section className="grid content-start gap-3 rounded border border-white/10 bg-studio-panel p-4">
+      <h3 className="font-semibold">{props.title}</h3>
+      {props.children}
+    </section>
+  );
+}
+
+function AnalyticsStat(props: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-2 last:border-b-0 last:pb-0">
+      <span className="text-sm text-slate-400">{props.label}</span>
+      <strong>{props.value}</strong>
+    </div>
+  );
+}
+
+function AnalyticsBar(props: { label: string; value: number; max: number }) {
+  const width = props.max > 0 ? Math.round((props.value / props.max) * 100) : 0;
+  return (
+    <div className="grid gap-1">
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <span className="text-slate-300">{props.label}</span>
+        <strong>{props.value}</strong>
+      </div>
+      <div className="h-2 overflow-hidden rounded bg-black/40">
+        <div
+          className="h-full rounded bg-studio-lime"
+          style={{ width: `${width}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function BreakdownTable(props: {
+  title: string;
+  items: AnalyticsBreakdownItem[];
+}) {
+  return (
+    <section className="rounded border border-white/10 bg-studio-panel p-4">
+      <h3 className="font-semibold">{props.title}</h3>
+      {props.items.length === 0 ? (
+        <EmptyState
+          title={`No ${props.title.toLowerCase()} yet`}
+          body="Saved and evaluated bulletins will appear here."
+        />
+      ) : (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[560px] text-left text-sm">
+            <thead className="text-xs uppercase text-slate-500">
+              <tr>
+                <th className="py-2 pr-3 font-semibold">Name</th>
+                <th className="py-2 pr-3 font-semibold">Total</th>
+                <th className="py-2 pr-3 font-semibold">G</th>
+                <th className="py-2 pr-3 font-semibold">R</th>
+                <th className="py-2 pr-3 font-semibold">Pending</th>
+                <th className="py-2 pr-3 font-semibold">Win rate</th>
+              </tr>
+            </thead>
+            <tbody>
+              {props.items.map((item) => (
+                <tr key={item.label} className="border-t border-white/10">
+                  <td className="max-w-[220px] truncate py-2 pr-3 font-medium">
+                    {item.label}
+                  </td>
+                  <td className="py-2 pr-3">{item.total}</td>
+                  <td className="py-2 pr-3 text-emerald-300">{item.green}</td>
+                  <td className="py-2 pr-3 text-red-300">{item.red}</td>
+                  <td className="py-2 pr-3">{item.pending}</td>
+                  <td className="py-2 pr-3">{item.winRate}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

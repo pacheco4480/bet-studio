@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import type { AnalyticsService } from '../../application/analytics/analytics-service.js';
 import { BulletinService } from '../../application/bulletins/bulletin-service.js';
 import type { HistoryService } from '../../application/history/history-service.js';
 import type { RenderingService } from '../../application/rendering/rendering-service.js';
@@ -17,6 +18,7 @@ import {
 } from '../../shared/errors.js';
 
 export function buildApiApp(options?: {
+  analyticsService?: AnalyticsService;
   bulletinService?: BulletinService;
   catalogService?: CatalogService;
   historyService?: HistoryService;
@@ -32,6 +34,12 @@ export function buildApiApp(options?: {
   app.get('/api/health', () => {
     return { status: 'ok' };
   });
+
+  if (options?.analyticsService) {
+    const analytics = options.analyticsService;
+
+    app.get('/api/analytics/summary', () => analytics.getSummary());
+  }
 
   if (options?.bulletinService) {
     const bulletins = options.bulletinService;
