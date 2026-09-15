@@ -225,6 +225,27 @@ type Tab =
   | 'fixtures'
   | 'settlement';
 
+const tabLabels: Record<Tab, string> = {
+  bulletins: 'Bulletins',
+  history: 'History',
+  competitions: 'Competitions',
+  teams: 'Teams',
+  markets: 'Markets',
+  fixtures: 'Fixtures',
+  settlement: 'Settlement',
+};
+
+const tabDescriptions: Record<Tab, string> = {
+  bulletins: 'Create, preview, save and export betting bulletins.',
+  history: 'Review saved bulletins, results, overrides and rendered PNGs.',
+  competitions: 'Manage the competitions used by teams, fixtures and sync.',
+  teams: 'Manage teams, aliases and competition links.',
+  markets: 'Manage manual and automatically evaluated betting markets.',
+  fixtures: 'Refresh provider fixtures for a selected match date.',
+  settlement:
+    'Technical settlement tools for direct selection or bulletin IDs.',
+};
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers = new Headers(options?.headers);
   if (options?.body && !headers.has('Content-Type')) {
@@ -257,14 +278,17 @@ export function App() {
   return (
     <main className="min-h-screen bg-studio-ink text-white">
       <div className="mx-auto w-full max-w-7xl px-6 py-8">
-        <header className="flex flex-col gap-4 border-b border-white/10 pb-6 md:flex-row md:items-end md:justify-between">
+        <header className="flex flex-col gap-4 border-b border-white/10 pb-6">
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-studio-lime">
               Bet Studio
             </p>
             <h1 className="mt-3 text-3xl font-bold">Catalog Management</h1>
+            <p className="mt-2 max-w-2xl text-sm text-slate-400">
+              {tabDescriptions[tab]}
+            </p>
           </div>
-          <nav className="flex gap-2" aria-label="Catalog sections">
+          <nav className="flex flex-wrap gap-2" aria-label="Catalog sections">
             {(
               [
                 'bulletins',
@@ -278,15 +302,16 @@ export function App() {
             ).map((item) => (
               <button
                 key={item}
-                className={`rounded border px-4 py-2 text-sm font-medium capitalize focus:outline focus:outline-2 focus:outline-studio-lime ${
+                className={`rounded border px-4 py-2 text-sm font-medium focus:outline focus:outline-2 focus:outline-studio-lime ${
                   tab === item
                     ? 'border-studio-lime bg-studio-lime text-black'
                     : 'border-white/10 bg-studio-panel text-slate-200'
                 }`}
                 onClick={() => setTab(item)}
                 type="button"
+                aria-current={tab === item ? 'page' : undefined}
               >
-                {item}
+                {tabLabels[item]}
               </button>
             ))}
           </nav>
@@ -792,7 +817,10 @@ function BulletinsPanel(props: {
       <section className="grid gap-3">
         <h3 className="text-lg font-semibold">Saved bulletins</h3>
         {items.length === 0 && (
-          <p className="text-sm text-slate-500">No bulletins saved yet.</p>
+          <EmptyState
+            title="No bulletins saved yet"
+            body="Complete a fixture, market and odd above, then save the bulletin."
+          />
         )}
         {items.map((item) => (
           <article
@@ -803,10 +831,10 @@ function BulletinsPanel(props: {
               <h4 className="font-semibold">{item.publicCode}</h4>
               <p className="text-sm text-slate-400">
                 {item.type} | {item.mode} | {item.selectionCount} selections |{' '}
-                <StatusBadge status={item.status} /> |{' '}
                 {item.totalOdd ?? 'No odd'}
               </p>
             </div>
+            <StatusBadge status={item.status} />
             <button
               type="button"
               className="rounded border border-white/10 px-3 py-2 text-sm"
@@ -1893,6 +1921,33 @@ function StatusBadge(props: { status: string }) {
   );
 }
 
+function SyncStatusBadge(props: { status: string }) {
+  const status = props.status.toUpperCase();
+  const statusClass =
+    status === 'SUCCESS'
+      ? 'border-emerald-400/50 bg-emerald-500/15 text-emerald-200'
+      : status === 'PARTIAL'
+        ? 'border-amber-300/50 bg-amber-400/15 text-amber-100'
+        : 'border-rose-400/50 bg-rose-500/15 text-rose-200';
+
+  return (
+    <span
+      className={`inline-flex rounded border px-2 py-1 text-xs font-semibold ${statusClass}`}
+    >
+      {status}
+    </span>
+  );
+}
+
+function EmptyState(props: { title: string; body: string }) {
+  return (
+    <div className="rounded border border-dashed border-white/15 bg-black/20 p-4">
+      <p className="font-semibold text-slate-200">{props.title}</p>
+      <p className="mt-1 text-sm text-slate-400">{props.body}</p>
+    </div>
+  );
+}
+
 function optionalInteger(value: string): number | null {
   if (!value.trim()) return null;
   const parsed = Number(value);
@@ -1968,6 +2023,12 @@ function CompetitionsPanel() {
         }}
       />
       <div className="grid gap-3">
+        {items.length === 0 && (
+          <EmptyState
+            title="No competitions found"
+            body="Create a local competition or refresh GOAL API competitions if the provider is configured."
+          />
+        )}
         {items.map((item) => (
           <CatalogCard
             key={item.id}
@@ -2201,6 +2262,12 @@ function TeamsPanel() {
         }}
       />
       <div className="grid gap-6">
+        {items.length === 0 && (
+          <EmptyState
+            title="No teams found"
+            body="Create local teams, link teams to a competition, or sync teams for one active competition."
+          />
+        )}
         {groupedTeams.map(([competitionName, teams]) => (
           <section key={competitionName} className="grid gap-3">
             <div className="flex items-baseline justify-between border-b border-white/10 pb-2">
@@ -2344,6 +2411,12 @@ function MarketsPanel() {
         }}
       />
       <div className="grid gap-3">
+        {items.length === 0 && (
+          <EmptyState
+            title="No markets found"
+            body="Create a market manually or run database migrations to seed the default market catalog."
+          />
+        )}
         {items.map((item) => (
           <CatalogCard
             key={item.id}
@@ -2639,8 +2712,8 @@ function SettlementPanel() {
       {selectionResult && <SettlementResultCard result={selectionResult} />}
       {bulletinResult && (
         <section className="grid gap-3 rounded border border-white/10 bg-black/20 p-4">
-          <h3 className="font-semibold">
-            Bulletin status: {bulletinResult.status}
+          <h3 className="flex items-center gap-2 font-semibold">
+            Bulletin status: <StatusBadge status={bulletinResult.status} />
           </h3>
           {bulletinResult.selections.map((selection) => (
             <SettlementResultCard
@@ -2658,9 +2731,13 @@ function SettlementResultCard(props: { result: EvaluatedSelection }) {
   return (
     <article className="grid gap-2 rounded border border-white/10 bg-black/20 p-4 text-sm text-slate-300">
       <h3 className="font-semibold text-white">{props.result.selectionId}</h3>
-      <p>Calculated: {props.result.calculatedStatus}</p>
+      <p>
+        Calculated: <StatusBadge status={props.result.calculatedStatus} />
+      </p>
       <p>Manual override: {props.result.manualStatus ?? 'None'}</p>
-      <p>Effective: {props.result.effectiveStatus}</p>
+      <p>
+        Effective: <StatusBadge status={props.result.effectiveStatus} />
+      </p>
       <p>
         Engine: {props.result.result.evaluatorKey ?? 'N/A'}@
         {props.result.result.evaluatorVersion ?? 'N/A'} |{' '}
@@ -2696,14 +2773,19 @@ function SyncPanel(props: {
           <p className="mt-1 text-sm text-slate-400">
             {provider?.configured
               ? `Available${provider.lastSuccessfulSyncAt ? ` | Last sync ${provider.lastSuccessfulSyncAt}` : ''}`
-              : 'Not configured'}
+              : 'Not configured. Local manual workflows remain available.'}
           </p>
         </div>
         <div className="flex flex-col gap-3 md:flex-row md:items-end">
           {props.children}
           <button
             type="button"
-            disabled={loading || props.disabled}
+            disabled={loading || props.disabled || !provider?.configured}
+            title={
+              provider?.configured
+                ? props.actionLabel
+                : 'Add GOAL_API_KEY to .env to enable provider synchronization.'
+            }
             className="rounded bg-studio-lime px-4 py-2 font-semibold text-black disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300"
             onClick={() => {
               setLoading(true);
@@ -2723,10 +2805,13 @@ function SyncPanel(props: {
         </div>
       </div>
       {result && (
-        <p className="text-sm text-slate-300">
-          {result.status}: {result.processed} processed, {result.created}{' '}
-          created, {result.updated} updated, {result.unresolved} unresolved,{' '}
-          {result.failed} failed
+        <p className="flex flex-wrap items-center gap-2 text-sm text-slate-300">
+          <SyncStatusBadge status={result.status} />
+          <span>
+            {result.processed} processed, {result.created} created,{' '}
+            {result.updated} updated, {result.unresolved} unresolved,{' '}
+            {result.failed} failed
+          </span>
         </p>
       )}
       {error && <p className="text-sm text-red-200">{error}</p>}
