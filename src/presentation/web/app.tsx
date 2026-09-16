@@ -185,6 +185,11 @@ type ProviderStatus = {
   code: string;
   displayName: string;
   configured: boolean;
+  capabilities?: {
+    corners: boolean;
+    teamLogos: boolean;
+    competitionLogos: boolean;
+  };
   lastSuccessfulSyncAt: string | null;
 };
 
@@ -778,7 +783,49 @@ function ProviderStatusCard() {
           ? `Configured${provider.lastSuccessfulSyncAt ? ` | Last sync ${provider.lastSuccessfulSyncAt}` : ''}`
           : 'Not configured. Add GOAL_API_KEY to .env to enable provider synchronization.'}
       </p>
+      {provider && (
+        <div className="mt-3 flex flex-wrap gap-2 text-xs">
+          <CapabilityPill
+            label="Corners"
+            enabled={provider.capabilities?.corners === true}
+          />
+          <CapabilityPill
+            label="Team logos"
+            enabled={provider.capabilities?.teamLogos === true}
+          />
+          <CapabilityPill
+            label="Competition logos"
+            enabled={provider.capabilities?.competitionLogos === true}
+          />
+        </div>
+      )}
+      {provider?.configured && provider.capabilities?.corners === false && (
+        <p className="mt-2 text-xs text-amber-200">
+          Corner markets remain manual unless you enter corner totals in
+          History.
+        </p>
+      )}
+      {provider?.configured && provider.capabilities?.teamLogos === false && (
+        <p className="mt-1 text-xs text-slate-500">
+          Provider logo URLs are not imported yet; rendered logos use the local
+          initials fallback.
+        </p>
+      )}
     </section>
+  );
+}
+
+function CapabilityPill(props: { label: string; enabled: boolean }) {
+  return (
+    <span
+      className={`rounded border px-2 py-1 font-semibold ${
+        props.enabled
+          ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-200'
+          : 'border-white/10 bg-black/20 text-slate-400'
+      }`}
+    >
+      {props.label}: {props.enabled ? 'Available' : 'Manual'}
+    </span>
   );
 }
 
@@ -2279,6 +2326,7 @@ function HistorySelectionCard(props: {
       ? ''
       : String(details.awayCorners),
   );
+  const needsCorners = selectionNeedsCorners(props.item);
 
   useEffect(() => {
     setFixtureStatus(fixture?.status ?? 'SCHEDULED');
@@ -2344,7 +2392,11 @@ function HistorySelectionCard(props: {
         </div>
       </div>
 
-      <div className="grid gap-3 rounded border border-white/10 p-3 md:grid-cols-5">
+      <div
+        className={`grid gap-3 rounded border border-white/10 p-3 ${
+          needsCorners ? 'md:grid-cols-5' : 'md:grid-cols-3'
+        }`}
+      >
         <SelectInput
           label="Fixture status"
           value={fixtureStatus}
@@ -2369,16 +2421,26 @@ function HistorySelectionCard(props: {
           value={awayScore}
           onChange={setAwayScore}
         />
-        <TextInput
-          label="Home corners"
-          value={homeCorners}
-          onChange={setHomeCorners}
-        />
-        <TextInput
-          label="Away corners"
-          value={awayCorners}
-          onChange={setAwayCorners}
-        />
+        {needsCorners && (
+          <>
+            <TextInput
+              label="Home corners"
+              value={homeCorners}
+              onChange={setHomeCorners}
+            />
+            <TextInput
+              label="Away corners"
+              value={awayCorners}
+              onChange={setAwayCorners}
+            />
+            {fixture?.sourceType === 'SYNCED' && (
+              <p className="text-xs text-amber-200 md:col-span-5">
+                Corner totals are not filled by the current GOAL API sync. Enter
+                them manually before evaluating corner markets.
+              </p>
+            )}
+          </>
+        )}
         <button
           type="button"
           className="rounded bg-studio-lime px-3 py-2 text-sm font-semibold text-black md:col-span-2"
@@ -2522,6 +2584,27 @@ function HistorySelectionCard(props: {
       </details>
     </article>
   );
+}
+
+function selectionNeedsCorners(item: HistorySelectionDetail): boolean {
+  if (item.market?.evaluatorKey === 'TOTAL_CORNERS') return true;
+  return hasEvaluatorKey(item.market?.parameters, 'TOTAL_CORNERS');
+}
+
+function hasEvaluatorKey(value: unknown, evaluatorKey: string): boolean {
+  if (!value || typeof value !== 'object') return false;
+  if (
+    'evaluatorKey' in value &&
+    (value as { evaluatorKey?: unknown }).evaluatorKey === evaluatorKey
+  ) {
+    return true;
+  }
+  return Object.values(value).some((entry) => {
+    if (Array.isArray(entry)) {
+      return entry.some((item) => hasEvaluatorKey(item, evaluatorKey));
+    }
+    return hasEvaluatorKey(entry, evaluatorKey);
+  });
 }
 
 function SelectInput(props: {
@@ -2985,7 +3068,7 @@ function MarketCategoryGroup(props: {
           <CatalogCard
             key={item.id}
             title={item.name}
-            subtitle={`${item.code} | ${item.autoEvaluable ? item.evaluatorKey : 'Manual'}`}
+            subtitle={`${item.code} | ${marketCoverageLabel(item)}`}
             active={item.active}
             onEdit={() => props.onEdit(item)}
             onToggle={() => props.onToggle(item)}
@@ -3082,6 +3165,20 @@ function MarketsPanel() {
       left.localeCompare(right),
     );
   }, [items]);
+  const marketReadiness = useMemo(() => {
+    const manual = items.filter((market) => !market.autoEvaluable).length;
+    const automatic = items.filter(
+      (market) =>
+        market.autoEvaluable &&
+        market.evaluatorKey &&
+        !marketDependsOnCorners(market),
+    ).length;
+    const needsManualCorners = items.filter(marketDependsOnCorners).length;
+    const misconfigured = items.filter(
+      (market) => market.autoEvaluable && !market.evaluatorKey,
+    ).length;
+    return { automatic, manual, needsManualCorners, misconfigured };
+  }, [items]);
   const load = useCallback(
     async () =>
       setItems(
@@ -3104,6 +3201,21 @@ function MarketsPanel() {
         active={active}
         setActive={setActive}
       />
+      <section className="grid gap-3 md:grid-cols-4">
+        <MetricCard
+          label="Automatic"
+          value={String(marketReadiness.automatic)}
+        />
+        <MetricCard label="Manual" value={String(marketReadiness.manual)} />
+        <MetricCard
+          label="Needs corner totals"
+          value={String(marketReadiness.needsManualCorners)}
+        />
+        <MetricCard
+          label="Misconfigured"
+          value={String(marketReadiness.misconfigured)}
+        />
+      </section>
       <MarketForm
         current={editing}
         onSaved={() => {
@@ -3137,6 +3249,23 @@ function MarketsPanel() {
   );
 }
 
+function marketCoverageLabel(market: Market): string {
+  if (!market.autoEvaluable) return 'Manual settlement';
+  if (!market.evaluatorKey) return 'Automatic flag missing evaluator';
+  if (marketDependsOnCorners(market)) {
+    return 'Automatic with manual corner totals';
+  }
+  if (market.evaluatorKey === 'COMPOSITE') return 'Automatic composite';
+  return `Automatic ${market.evaluatorKey}`;
+}
+
+function marketDependsOnCorners(market: Market): boolean {
+  return (
+    market.evaluatorKey === 'TOTAL_CORNERS' ||
+    hasEvaluatorKey(market.parameters, 'TOTAL_CORNERS')
+  );
+}
+
 function MarketForm(props: { current: Market | null; onSaved: () => void }) {
   const current = props.current;
   const [code, setCode] = useState('');
@@ -3151,8 +3280,10 @@ function MarketForm(props: { current: Market | null; onSaved: () => void }) {
     setName(current?.name ?? '');
     setCategory(current?.category ?? '');
     setAutoEvaluable(current?.autoEvaluable ?? false);
-    setEvaluatorKey(current?.evaluatorKey ?? 'TOTAL_GOALS');
-    setChoice(defaultChoice(current?.evaluatorKey ?? 'TOTAL_GOALS'));
+    const key = current?.evaluatorKey ?? 'TOTAL_GOALS';
+    setEvaluatorKey(key);
+    setChoice(marketChoice(current?.parameters, key) ?? defaultChoice(key));
+    setLine(marketLine(current?.parameters) ?? defaultLine(key));
   }, [current]);
   const parameters = useMemo(() => {
     if (evaluatorKey === 'MATCH_RESULT') return { result: choice };
@@ -3227,6 +3358,7 @@ function MarketForm(props: { current: Market | null; onSaved: () => void }) {
                 const value = event.target.value;
                 setEvaluatorKey(value);
                 setChoice(defaultChoice(value));
+                setLine(defaultLine(value));
               }}
             >
               <option value="MATCH_RESULT">Match Result</option>
@@ -3524,6 +3656,33 @@ function defaultChoice(evaluatorKey: string): string {
   if (evaluatorKey === 'DOUBLE_CHANCE') return '1X';
   if (evaluatorKey === 'BTTS') return 'YES';
   return 'OVER';
+}
+
+function defaultLine(evaluatorKey: string): string {
+  return evaluatorKey === 'TOTAL_CORNERS' ? '9.5' : '2.5';
+}
+
+function marketChoice(
+  parameters: unknown,
+  evaluatorKey: string,
+): string | null {
+  if (!parameters || typeof parameters !== 'object') return null;
+  const input = parameters as Record<string, unknown>;
+  const value =
+    evaluatorKey === 'MATCH_RESULT'
+      ? input.result
+      : evaluatorKey === 'DOUBLE_CHANCE'
+        ? input.outcome
+        : evaluatorKey === 'BTTS'
+          ? input.selection
+          : input.direction;
+  return typeof value === 'string' ? value : null;
+}
+
+function marketLine(parameters: unknown): string | null {
+  if (!parameters || typeof parameters !== 'object') return null;
+  const value = (parameters as { line?: unknown }).line;
+  return typeof value === 'number' ? String(value) : null;
 }
 
 function ChoiceSelect(props: {

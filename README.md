@@ -122,6 +122,8 @@ The API runs on `127.0.0.1:3000` by default and the Vite web app runs on the por
 
 GOAL API integration is optional and server-side only. The provider can refresh configured competitions, teams, fixtures and fixture results, but provider responses are treated as untrusted input and normalized before persistence.
 
+The current GOAL API adapter does not enable corners or provider logos as trusted capabilities. Corner markets can still be evaluated after corner totals are entered manually in History. Rendered team logos currently use the local initials fallback until safe provider asset ingestion is implemented.
+
 Bet Studio does not require provider access for local competitions, teams, fixtures, bulletins, settlement, history or rendering.
 
 See [docs/api-integration.md](docs/api-integration.md) for provider behavior and failure rules.
