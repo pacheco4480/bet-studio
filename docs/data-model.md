@@ -607,6 +607,7 @@ type BulletinRenderConfig = {
   showTotalOdd: boolean;
   showResult: boolean;
   showBulletinCode: boolean;
+  showOverallStatus?: boolean;
   showTeamLogos?: boolean;
   templateTheme?: 'LIME' | 'ELECTRIC' | 'MONO';
 };

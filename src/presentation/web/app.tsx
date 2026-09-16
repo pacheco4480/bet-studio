@@ -744,7 +744,16 @@ function SettingsPanel() {
         <summary className="cursor-pointer font-semibold">
           Advanced settlement tools
         </summary>
-        <div className="mt-4">
+        <div className="mt-4 grid gap-4">
+          <div className="rounded border border-white/10 bg-black/20 p-3 text-sm text-slate-300">
+            <p className="font-semibold text-white">When to use this</p>
+            <p className="mt-1">
+              These controls are for recovery and audit work when you already
+              know a bulletin or selection ID. Day-to-day result updates are
+              easier from History, where each selection has its own refresh,
+              score and override controls.
+            </p>
+          </div>
           <SettlementPanel />
         </div>
       </details>
@@ -846,6 +855,7 @@ const renderToggleLabels: Array<[string, string]> = [
   ['showTotalOdd', 'Total odd'],
   ['showResult', 'Selection status'],
   ['showBulletinCode', 'Bulletin code'],
+  ['showOverallStatus', 'Overall status'],
   ['showTeamLogos', 'Team logos'],
 ];
 
@@ -874,6 +884,7 @@ const defaultDraft: BulletinDraft = {
     showTotalOdd: true,
     showResult: true,
     showBulletinCode: true,
+    showOverallStatus: true,
     showTeamLogos: true,
     templateTheme: 'LIME',
   },
@@ -1689,7 +1700,9 @@ function BulletinPreview(props: {
             {props.draft.type} | {props.draft.mode}
           </h3>
         </div>
-        <StatusBadge status={status} />
+        {renderToggleValue(props.draft.renderConfig, 'showOverallStatus') && (
+          <StatusBadge status={status} />
+        )}
       </div>
       <div className="grid gap-2">
         {selections.map((item) => (
@@ -1934,6 +1947,7 @@ function formatFixtureDateTime(value: string | null): string {
 }
 
 function HistoryPanel(props: { onEdit: (id: string) => void }) {
+  const pageSize = 50;
   const [items, setItems] = useState<HistoryListItem[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [detail, setDetail] = useState<HistoryDetail | null>(null);
@@ -1941,6 +1955,7 @@ function HistoryPanel(props: { onEdit: (id: string) => void }) {
   const [status, setStatus] = useState('all');
   const [type, setType] = useState('all');
   const [mode, setMode] = useState('all');
+  const [limit, setLimit] = useState(pageSize);
   const [loading, setLoading] = useState(false);
   const [action, setAction] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -1952,12 +1967,12 @@ function HistoryPanel(props: { onEdit: (id: string) => void }) {
     if (status !== 'all') params.set('status', status);
     if (type !== 'all') params.set('type', type);
     if (mode !== 'all') params.set('mode', mode);
-    params.set('limit', '50');
+    params.set('limit', String(limit));
     const response = await request<{ items: HistoryListItem[] }>(
       `/api/history/bulletins?${params.toString()}`,
     );
     setItems(response.items);
-  }, [mode, search, status, type]);
+  }, [limit, mode, search, status, type]);
 
   const loadDetail = useCallback(async (id: string) => {
     if (!id) {
@@ -1974,6 +1989,10 @@ function HistoryPanel(props: { onEdit: (id: string) => void }) {
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
   }, [loadList]);
+
+  useEffect(() => {
+    setLimit(pageSize);
+  }, [mode, search, status, type]);
 
   useEffect(() => {
     void loadDetail(selectedId).catch((err: Error) => setError(err.message));
@@ -2020,6 +2039,21 @@ function HistoryPanel(props: { onEdit: (id: string) => void }) {
 
       <section className="grid gap-4 lg:grid-cols-[360px_1fr]">
         <div className="grid content-start gap-3">
+          <div className="flex items-center justify-between gap-3 text-sm text-slate-400">
+            <span>
+              Showing {items.length}
+              {items.length >= limit ? ` of first ${limit}` : ''} bulletins
+            </span>
+            {items.length >= limit && (
+              <button
+                type="button"
+                className="rounded border border-white/10 px-3 py-2 font-semibold text-slate-200"
+                onClick={() => setLimit((current) => current + pageSize)}
+              >
+                Load more
+              </button>
+            )}
+          </div>
           {loading && (
             <p className="text-sm text-slate-400">Loading history...</p>
           )}
@@ -3658,35 +3692,56 @@ function TeamCard(props: {
   onRemoveAlias: (aliasId: string) => void;
   onRemoveCompetition: (competitionId: string) => void;
 }) {
+  const metadata = [props.team.shortName, props.team.countryCode]
+    .filter(Boolean)
+    .join(' | ');
+  const hasDetails =
+    metadata ||
+    props.team.aliases.length > 0 ||
+    props.team.competitions.length > 0;
+
   return (
     <article className="grid gap-4 rounded border border-white/10 bg-black/20 p-4 md:grid-cols-[1fr_auto]">
       <div className="grid gap-3">
         <div>
           <h3 className="font-semibold">{props.team.name}</h3>
-          <p className="mt-1 text-sm text-slate-400">
-            {[props.team.shortName, props.team.countryCode]
-              .filter(Boolean)
-              .join(' | ') || 'No metadata'}
-          </p>
+          {metadata ? (
+            <p className="mt-1 text-sm text-slate-400">{metadata}</p>
+          ) : (
+            <p className="mt-1 text-xs text-slate-500">
+              No extra details saved yet
+            </p>
+          )}
         </div>
-        <TokenList
-          title="Aliases"
-          empty="No aliases"
-          items={props.team.aliases.map((alias) => ({
-            id: alias.id,
-            label: alias.value,
-          }))}
-          onRemove={props.onRemoveAlias}
-        />
-        <TokenList
-          title="Competitions"
-          empty="No competitions"
-          items={props.team.competitions.map((competition) => ({
-            id: competition.id,
-            label: competition.name,
-          }))}
-          onRemove={props.onRemoveCompetition}
-        />
+        {hasDetails && (
+          <details className="rounded border border-white/10 bg-black/20 p-3">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-300">
+              Team details
+            </summary>
+            <div className="mt-3 grid gap-3">
+              {props.team.aliases.length > 0 && (
+                <TokenList
+                  title="Aliases"
+                  items={props.team.aliases.map((alias) => ({
+                    id: alias.id,
+                    label: alias.value,
+                  }))}
+                  onRemove={props.onRemoveAlias}
+                />
+              )}
+              {props.team.competitions.length > 0 && (
+                <TokenList
+                  title="Competitions"
+                  items={props.team.competitions.map((competition) => ({
+                    id: competition.id,
+                    label: competition.name,
+                  }))}
+                  onRemove={props.onRemoveCompetition}
+                />
+              )}
+            </div>
+          </details>
+        )}
       </div>
       <div className="flex items-start gap-2">
         <span
@@ -3715,7 +3770,6 @@ function TeamCard(props: {
 
 function TokenList(props: {
   title: string;
-  empty: string;
   items: Array<{ id: string; label: string }>;
   onRemove: (id: string) => void;
 }) {
@@ -3725,9 +3779,6 @@ function TokenList(props: {
         {props.title}
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
-        {props.items.length === 0 && (
-          <span className="text-sm text-slate-500">{props.empty}</span>
-        )}
         {props.items.map((item) => (
           <span
             key={item.id}

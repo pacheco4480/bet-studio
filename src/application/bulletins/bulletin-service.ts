@@ -96,6 +96,7 @@ const displayOptionsSchema = z
     showTotalOdd: z.boolean(),
     showResult: z.boolean(),
     showBulletinCode: z.boolean(),
+    showOverallStatus: z.boolean(),
     showTeamLogos: z.boolean(),
     templateTheme: z.enum(['LIME', 'ELECTRIC', 'MONO']),
   })
@@ -142,6 +143,7 @@ const defaultRenderConfig: BulletinRenderConfig = {
   showTotalOdd: true,
   showResult: true,
   showBulletinCode: true,
+  showOverallStatus: true,
   showTeamLogos: true,
   templateTheme: 'LIME',
 };

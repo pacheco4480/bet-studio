@@ -156,6 +156,7 @@ type RenderBulletinModel = {
     showTotalOdd: boolean;
     showResult: boolean;
     showBulletinCode: boolean;
+    showOverallStatus?: boolean;
     showTeamLogos?: boolean;
     templateTheme?: 'LIME' | 'ELECTRIC' | 'MONO';
   };
@@ -770,6 +771,7 @@ showStake
 showTotalOdd
 showResult
 showBulletinCode
+showOverallStatus
 showTeamLogos
 templateTheme
 

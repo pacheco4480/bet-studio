@@ -148,7 +148,7 @@ function renderHtml(
           </div>
           <div class="header-side">
             ${model.display.showBulletinCode ? `<span>${escapeHtml(model.publicCode)}</span>` : ''}
-            <strong class="overall ${model.overallStatus.toLowerCase()}">${model.overallStatus}</strong>
+            ${model.display.showOverallStatus === false ? '' : `<strong class="overall ${model.overallStatus.toLowerCase()}">${model.overallStatus}</strong>`}
           </div>
         </header>
         <section class="selections">${cards}</section>
