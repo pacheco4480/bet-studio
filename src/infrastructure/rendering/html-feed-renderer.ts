@@ -157,7 +157,7 @@ function renderHtml(
           <div>${potentialReturn ? `<span>POTENTIAL RETURN</span><strong>${escapeHtml(potentialReturn)}</strong>` : ''}</div>
           <div>${model.display.showTotalOdd ? `<span>ODD TOTAL</span><strong>${escapeHtml(model.totalOdd ?? '-')}</strong>` : ''}</div>
         </section>
-        <footer class="footer">Deterministic FEED 1080x1350</footer>
+        <footer class="footer">${escapeHtml(model.display.footerText?.trim() || 'Deterministic FEED 1080x1350')}</footer>
       </main>
     </body>
   </html>`;
@@ -207,6 +207,57 @@ function themedColors(template: RenderTemplateVersion, themeName: unknown) {
       canvasBackground:
         'radial-gradient(circle at 18% 8%,rgba(255,255,255,.08),transparent 28%),linear-gradient(145deg,#08090b,#14161a 58%,#050506)',
       cardBackground: 'linear-gradient(180deg,#20242b,#15171b)',
+    };
+  }
+  if (themeName === 'CHAMPIONS') {
+    return {
+      ...theme,
+      background: '#030716',
+      panel: '#0b1533',
+      panelStrong: '#13245a',
+      textPrimary: '#f8fbff',
+      textSecondary: '#c7d2fe',
+      textMuted: '#93a4cf',
+      accent: '#dbeafe',
+      accentSecondary: '#60a5fa',
+      border: '#29447a',
+      canvasBackground:
+        'radial-gradient(circle at 78% 0%,rgba(96,165,250,.24),transparent 30%),linear-gradient(145deg,#030716,#0b1533 58%,#050816)',
+      cardBackground: 'linear-gradient(180deg,#13245a,#0b1533)',
+    };
+  }
+  if (themeName === 'EUROPA') {
+    return {
+      ...theme,
+      background: '#100804',
+      panel: '#1c1208',
+      panelStrong: '#39200b',
+      textPrimary: '#fff7ed',
+      textSecondary: '#fed7aa',
+      textMuted: '#d6a271',
+      accent: '#f97316',
+      accentSecondary: '#facc15',
+      border: '#7c2d12',
+      canvasBackground:
+        'radial-gradient(circle at 18% 0%,rgba(249,115,22,.24),transparent 28%),linear-gradient(145deg,#100804,#1c1208 58%,#070402)',
+      cardBackground: 'linear-gradient(180deg,#39200b,#1c1208)',
+    };
+  }
+  if (themeName === 'CONFERENCE') {
+    return {
+      ...theme,
+      background: '#03120a',
+      panel: '#082015',
+      panelStrong: '#103721',
+      textPrimary: '#f0fdf4',
+      textSecondary: '#bbf7d0',
+      textMuted: '#86b998',
+      accent: '#22c55e',
+      accentSecondary: '#a3e635',
+      border: '#166534',
+      canvasBackground:
+        'radial-gradient(circle at 82% 8%,rgba(34,197,94,.22),transparent 30%),linear-gradient(145deg,#03120a,#082015 58%,#020604)',
+      cardBackground: 'linear-gradient(180deg,#103721,#082015)',
     };
   }
   return {

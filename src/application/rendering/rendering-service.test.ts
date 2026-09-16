@@ -217,7 +217,8 @@ describe('rendering', () => {
       mode: 'PRE_MATCH',
       renderConfig: {
         showTeamLogos: false,
-        templateTheme: 'ELECTRIC',
+        templateTheme: 'CHAMPIONS',
+        footerText: 't.me/betstudio',
       },
       selections: [
         {
@@ -231,7 +232,8 @@ describe('rendering', () => {
     await service.renderBulletin(bulletin.bulletin.id);
 
     expect(renderer.lastModel?.display.showTeamLogos).toBe(false);
-    expect(renderer.lastModel?.display.templateTheme).toBe('ELECTRIC');
+    expect(renderer.lastModel?.display.templateTheme).toBe('CHAMPIONS');
+    expect(renderer.lastModel?.display.footerText).toBe('t.me/betstudio');
   });
 
   it('refuses to read render files outside the configured export directory', async () => {

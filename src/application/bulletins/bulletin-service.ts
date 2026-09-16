@@ -98,7 +98,15 @@ const displayOptionsSchema = z
     showBulletinCode: z.boolean(),
     showOverallStatus: z.boolean(),
     showTeamLogos: z.boolean(),
-    templateTheme: z.enum(['LIME', 'ELECTRIC', 'MONO']),
+    templateTheme: z.enum([
+      'LIME',
+      'ELECTRIC',
+      'MONO',
+      'CHAMPIONS',
+      'EUROPA',
+      'CONFERENCE',
+    ]),
+    footerText: z.string().trim().max(80),
   })
   .partial();
 
@@ -146,6 +154,7 @@ const defaultRenderConfig: BulletinRenderConfig = {
   showOverallStatus: true,
   showTeamLogos: true,
   templateTheme: 'LIME',
+  footerText: 'Deterministic FEED 1080x1350',
 };
 
 export class BulletinService {

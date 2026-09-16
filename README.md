@@ -157,7 +157,7 @@ PNG
 
 Rendering uses structured saved bulletin data, frozen snapshots, versioned templates and local assets. Playwright Chromium is used to render and export the final PNG. Historical render records are kept separately, so a new export does not overwrite old render metadata.
 
-The Builder currently exposes three deterministic FEED themes: `LIME`, `ELECTRIC` and `MONO`. Team logo display can be toggled per bulletin; until safe provider asset caching is implemented, missing logos render as deterministic team initials.
+The Builder currently exposes six deterministic FEED themes: `LIME`, `ELECTRIC`, `MONO`, `CHAMPIONS`, `EUROPA` and `CONFERENCE`. Team logo display can be toggled per bulletin; until safe provider asset caching is implemented, missing logos render as deterministic team initials. Footer text is configurable per bulletin for channels, social links or service branding.
 
 Story `1080 x 1920` rendering is future scope.
 

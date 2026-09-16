@@ -609,7 +609,14 @@ type BulletinRenderConfig = {
   showBulletinCode: boolean;
   showOverallStatus?: boolean;
   showTeamLogos?: boolean;
-  templateTheme?: 'LIME' | 'ELECTRIC' | 'MONO';
+  templateTheme?:
+    | 'LIME'
+    | 'ELECTRIC'
+    | 'MONO'
+    | 'CHAMPIONS'
+    | 'EUROPA'
+    | 'CONFERENCE';
+  footerText?: string;
 };
 
 Do not store calculated layout coordinates here unless they are intentionally part of a persisted rendering contract.

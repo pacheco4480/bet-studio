@@ -89,7 +89,8 @@ type BulletinDto = {
   selections: BulletinSelectionDto[];
 };
 
-type RenderTheme = 'LIME' | 'ELECTRIC' | 'MONO';
+type RenderTheme =
+  'LIME' | 'ELECTRIC' | 'MONO' | 'CHAMPIONS' | 'EUROPA' | 'CONFERENCE';
 
 type BulletinListItem = {
   id: string;
@@ -916,7 +917,13 @@ function renderToggleValue(
 
 function renderThemeValue(config: BulletinDraft['renderConfig']): RenderTheme {
   const value = config.templateTheme;
-  return value === 'ELECTRIC' || value === 'MONO' ? value : 'LIME';
+  return value === 'ELECTRIC' ||
+    value === 'MONO' ||
+    value === 'CHAMPIONS' ||
+    value === 'EUROPA' ||
+    value === 'CONFERENCE'
+    ? value
+    : 'LIME';
 }
 
 const defaultDraft: BulletinDraft = {
@@ -934,6 +941,7 @@ const defaultDraft: BulletinDraft = {
     showOverallStatus: true,
     showTeamLogos: true,
     templateTheme: 'LIME',
+    footerText: 'Deterministic FEED 1080x1350',
   },
   selections: [{ fixtureId: '', marketId: '', odd: '1.50' }],
 };
@@ -1143,7 +1151,7 @@ function BulletinsPanel(props: {
             <strong className="text-xl text-white">{totalOdd}</strong>
           </div>
         </div>
-        <div className="grid gap-3 md:grid-cols-[220px_1fr]">
+        <div className="grid gap-3 md:grid-cols-[220px_minmax(220px,1fr)_1fr]">
           <label className="text-sm text-slate-300">
             Template
             <select
@@ -1165,8 +1173,27 @@ function BulletinsPanel(props: {
               <option value="LIME">Bet Studio Lime</option>
               <option value="ELECTRIC">Electric Night</option>
               <option value="MONO">Mono Slate</option>
+              <option value="CHAMPIONS">Champions Night</option>
+              <option value="EUROPA">Europa Amber</option>
+              <option value="CONFERENCE">Conference Green</option>
             </select>
           </label>
+          <TextInput
+            label="Footer text"
+            value={String(
+              draft.renderConfig.footerText ?? 'Deterministic FEED 1080x1350',
+            )}
+            onChange={(value) => {
+              setDraft({
+                ...draft,
+                renderConfig: {
+                  ...draft.renderConfig,
+                  footerText: value,
+                },
+              });
+              setSaveState('Unsaved');
+            }}
+          />
           <div className="flex flex-wrap gap-3">
             {renderToggleLabels.map(([key, label]) => (
               <label
@@ -1809,6 +1836,13 @@ function BulletinPreview(props: {
           )}
         </div>
       </div>
+      <p
+        className={`border-t border-white/10 pt-3 text-center text-xs ${themeClasses.mutedText}`}
+      >
+        {String(
+          props.draft.renderConfig.footerText ?? 'Deterministic FEED 1080x1350',
+        ) || 'Deterministic FEED 1080x1350'}
+      </p>
     </aside>
   );
 }
@@ -1820,6 +1854,7 @@ function previewThemeClasses(theme: RenderTheme) {
         'border-cyan-300/25 bg-indigo-950/35 shadow-[0_0_30px_rgba(34,211,238,0.08)]',
       card: 'border-cyan-300/20 bg-indigo-950/50',
       accentText: 'text-cyan-200',
+      mutedText: 'text-cyan-100/70',
       logo: 'border-cyan-300/30 bg-slate-950 text-cyan-200',
     };
   }
@@ -1828,13 +1863,45 @@ function previewThemeClasses(theme: RenderTheme) {
       shell: 'border-zinc-400/20 bg-zinc-950/45',
       card: 'border-zinc-500/20 bg-zinc-900/70',
       accentText: 'text-zinc-200',
+      mutedText: 'text-zinc-400',
       logo: 'border-zinc-400/30 bg-black text-zinc-100',
+    };
+  }
+  if (theme === 'CHAMPIONS') {
+    return {
+      shell:
+        'border-blue-300/25 bg-blue-950/35 shadow-[0_0_30px_rgba(96,165,250,0.08)]',
+      card: 'border-blue-300/20 bg-blue-950/55',
+      accentText: 'text-blue-100',
+      mutedText: 'text-blue-200/65',
+      logo: 'border-blue-300/30 bg-slate-950 text-blue-100',
+    };
+  }
+  if (theme === 'EUROPA') {
+    return {
+      shell:
+        'border-orange-300/25 bg-orange-950/25 shadow-[0_0_30px_rgba(249,115,22,0.08)]',
+      card: 'border-orange-300/20 bg-orange-950/35',
+      accentText: 'text-orange-200',
+      mutedText: 'text-orange-200/65',
+      logo: 'border-orange-300/30 bg-black text-orange-200',
+    };
+  }
+  if (theme === 'CONFERENCE') {
+    return {
+      shell:
+        'border-emerald-300/25 bg-emerald-950/25 shadow-[0_0_30px_rgba(34,197,94,0.08)]',
+      card: 'border-emerald-300/20 bg-emerald-950/35',
+      accentText: 'text-emerald-200',
+      mutedText: 'text-emerald-200/65',
+      logo: 'border-emerald-300/30 bg-black text-emerald-200',
     };
   }
   return {
     shell: 'border-white/10 bg-black/30',
     card: 'border-white/10 bg-studio-panel',
     accentText: 'text-studio-lime',
+    mutedText: 'text-slate-500',
     logo: 'border-white/10 bg-black text-studio-lime',
   };
 }
