@@ -1,10 +1,12 @@
 import type {
+  Asset,
   Competition,
   Market,
   Team,
   TeamAlias,
 } from '../../domain/core/types.js';
 import type {
+  AssetId,
   CompetitionId,
   MarketId,
   TeamAliasId,
@@ -27,10 +29,23 @@ export type TeamWithDetails = Team & {
   competitions: Competition[];
 };
 
+export type AssetWithProvider = Asset & {
+  providerCode: string | null;
+};
+
+export type ManagedLogoStore = {
+  saveLogo(input: {
+    entityType: 'competition' | 'team';
+    entityId: string;
+    dataUrl: string;
+  }): Promise<AssetId>;
+};
+
 export type CatalogRepository = {
   listCompetitions(query: ListQuery): Competition[];
   getCompetition(id: CompetitionId): Competition | null;
   saveCompetition(competition: Competition): void;
+  getAsset(id: AssetId): AssetWithProvider | null;
 
   listTeams(query: TeamListQuery): TeamWithDetails[];
   getTeam(id: TeamId): TeamWithDetails | null;

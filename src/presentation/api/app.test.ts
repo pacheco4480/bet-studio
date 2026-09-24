@@ -1,6 +1,9 @@
 // @vitest-environment node
 
 import { describe, expect, it } from 'vitest';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import type { AnalyticsService } from '../../application/analytics/analytics-service.js';
 import type { BulletinService } from '../../application/bulletins/bulletin-service.js';
 import { CatalogService } from '../../application/catalog/catalog-service.js';
@@ -9,7 +12,10 @@ import type { SettlementService } from '../../application/settlement/settlement-
 import { SynchronizationService } from '../../application/synchronization/synchronization-service.js';
 import { DrizzleCatalogRepository } from '../../infrastructure/database/repositories/catalog-repository.js';
 import { DrizzleSyncRepository } from '../../infrastructure/database/repositories/sync-repository.js';
+import { LocalManagedLogoStore } from '../../infrastructure/assets/managed-logo-store.js';
 import { createMigratedTestDatabase } from '../../infrastructure/database/test-utils.js';
+import { assets, providers } from '../../infrastructure/database/schema.js';
+import { nowUtc } from '../../domain/shared/time.js';
 import { buildApiApp } from './app.js';
 
 describe('Bet Studio API health endpoint', () => {
@@ -77,6 +83,119 @@ describe('Bet Studio analytics API', () => {
 });
 
 describe('Bet Studio catalog API', () => {
+  it('normalizes, assigns and detaches manually uploaded logos', async () => {
+    const database = createMigratedTestDatabase();
+    const assetRoot = await mkdtemp(path.join(tmpdir(), 'bet-studio-managed-'));
+    const catalog = new CatalogService(
+      new DrizzleCatalogRepository(database.db),
+      assetRoot,
+      new LocalManagedLogoStore(database.db, assetRoot),
+    );
+    const team = catalog.createTeam({ name: 'Manual FC' });
+    const app = buildApiApp({ catalogService: catalog });
+    const png =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
+    try {
+      const uploaded = await app.inject({
+        method: 'POST',
+        url: `/api/teams/${team.id}/logo`,
+        payload: { dataUrl: png },
+      });
+      expect(uploaded.statusCode).toBe(200);
+      const body = uploaded.json<{ logo: { source: string; url: string } }>();
+      expect(body.logo.source).toBe('LOCAL');
+      expect(body.logo.url).toMatch(/^\/api\/assets\//);
+
+      const image = await app.inject({ method: 'GET', url: body.logo.url });
+      expect(image.statusCode).toBe(200);
+      expect(image.headers['content-type']).toBe('image/png');
+
+      const removed = await app.inject({
+        method: 'DELETE',
+        url: `/api/teams/${team.id}/logo`,
+      });
+      expect(removed.statusCode).toBe(200);
+      expect(removed.json<{ logo: null }>().logo).toBeNull();
+    } finally {
+      await app.close();
+      database.cleanup();
+      await rm(assetRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('exposes cached logo metadata and serves the local image safely', async () => {
+    const database = createMigratedTestDatabase();
+    const assetRoot = await mkdtemp(path.join(tmpdir(), 'bet-studio-assets-'));
+    const logoPath = path.join(assetRoot, 'arsenal.png');
+    const logoBytes = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+    await writeFile(logoPath, logoBytes);
+    const now = nowUtc();
+    database.db
+      .insert(providers)
+      .values({
+        id: 'provider-api-football',
+        code: 'API_FOOTBALL',
+        displayName: 'API-Football',
+        enabled: true,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+    database.db
+      .insert(assets)
+      .values({
+        id: 'asset-arsenal',
+        type: 'TEAM_LOGO',
+        source: 'PROVIDER',
+        filePath: logoPath,
+        contentHash: 'arsenal-hash',
+        mimeType: 'image/png',
+        originalUrl: 'https://media.example.test/arsenal.png',
+        providerId: 'provider-api-football',
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+    const catalog = new CatalogService(
+      new DrizzleCatalogRepository(database.db),
+      assetRoot,
+    );
+    catalog.createTeam({
+      name: 'Arsenal FC',
+      logoAssetId: 'asset-arsenal',
+    });
+    const app = buildApiApp({ catalogService: catalog });
+
+    try {
+      const listResponse = await app.inject({
+        method: 'GET',
+        url: '/api/teams?active=all',
+      });
+      expect(listResponse.statusCode).toBe(200);
+      expect(
+        listResponse.json<{ items: Array<{ logo: unknown }> }>().items[0].logo,
+      ).toEqual({
+        assetId: 'asset-arsenal',
+        source: 'PROVIDER',
+        providerCode: 'API_FOOTBALL',
+        url: '/api/assets/asset-arsenal',
+      });
+
+      const assetResponse = await app.inject({
+        method: 'GET',
+        url: '/api/assets/asset-arsenal',
+      });
+      expect(assetResponse.statusCode).toBe(200);
+      expect(assetResponse.headers['content-type']).toBe('image/png');
+      expect(assetResponse.rawPayload).toEqual(logoBytes);
+    } finally {
+      await app.close();
+      database.cleanup();
+      await rm(assetRoot, { recursive: true, force: true });
+    }
+  });
+
   it('creates, lists, updates and reads competitions', async () => {
     const database = createMigratedTestDatabase();
     const app = buildApiApp({

@@ -24,6 +24,33 @@ const serverEnvSchema = z.object({
     .min(5000)
     .max(15000)
     .default(10000),
+  API_FOOTBALL_API_KEY: z.preprocess(
+    (value) =>
+      typeof value === 'string' && value.trim() === '' ? undefined : value,
+    z.string().trim().min(1).optional(),
+  ),
+  API_FOOTBALL_BASE_URL: z
+    .string()
+    .url()
+    .startsWith('https://')
+    .default('https://v3.football.api-sports.io'),
+  API_FOOTBALL_TIMEOUT_MS: z.coerce
+    .number()
+    .int()
+    .min(5000)
+    .max(15000)
+    .default(10000),
+  API_FOOTBALL_REQUEST_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(6000)
+    .max(60000)
+    .default(6500),
+  API_FOOTBALL_SEASON: z.preprocess(
+    (value) =>
+      typeof value === 'string' && value.trim() === '' ? undefined : value,
+    z.coerce.number().int().min(2000).max(2200).default(2024),
+  ),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

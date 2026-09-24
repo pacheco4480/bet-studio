@@ -161,6 +161,7 @@ export type BulletinRenderConfig = {
   showBulletinCode: boolean;
   showOverallStatus?: boolean;
   showTeamLogos?: boolean;
+  teamLogoStyle?: 'INITIALS' | 'OFFICIAL';
   templateTheme?:
     'LIME' | 'ELECTRIC' | 'MONO' | 'CHAMPIONS' | 'EUROPA' | 'CONFERENCE';
   footerText?: string;

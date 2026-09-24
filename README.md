@@ -94,9 +94,21 @@ BET_STUDIO_DB_PATH=./data/bet-studio.db
 GOAL_API_KEY=
 GOAL_API_BASE_URL=https://api.goal-api.com/v1
 GOAL_API_TIMEOUT_MS=10000
+API_FOOTBALL_API_KEY=
+API_FOOTBALL_BASE_URL=https://v3.football.api-sports.io
+API_FOOTBALL_TIMEOUT_MS=10000
+API_FOOTBALL_REQUEST_INTERVAL_MS=6500
+API_FOOTBALL_SEASON=2024
 ```
 
 `GOAL_API_KEY` is optional. If it is empty, local workflows still work and provider sync actions fail gracefully.
+
+`API_FOOTBALL_API_KEY` is optional and is used only to download official team
+logos. Logos are cached locally and rendering remains available offline. Set
+`API_FOOTBALL_SEASON` defaults to 2024 because the free API-Football plan limits
+season access. Missing current teams are resolved through the team search
+endpoint and cached locally. The request interval respects the free plan's
+per-minute limit.
 
 Never commit `.env` or real API keys.
 
@@ -122,7 +134,7 @@ The API runs on `127.0.0.1:3000` by default and the Vite web app runs on the por
 
 GOAL API integration is optional and server-side only. The provider can refresh configured competitions, teams, fixtures and fixture results, but provider responses are treated as untrusted input and normalized before persistence.
 
-The current GOAL API adapter does not enable corners or provider logos as trusted capabilities. Corner markets can still be evaluated after corner totals are entered manually in History. Rendered team logos currently use the local initials fallback until safe provider asset ingestion is implemented.
+The current GOAL API adapter does not enable corners as a trusted capability. Corner markets can still be evaluated after corner totals are entered manually in History. Team logos can be cached locally from safe provider raster URLs when available, and rendered bulletins fall back to deterministic initials whenever an official logo is missing.
 
 Bet Studio does not require provider access for local competitions, teams, fixtures, bulletins, settlement, history or rendering.
 
@@ -157,7 +169,7 @@ PNG
 
 Rendering uses structured saved bulletin data, frozen snapshots, versioned templates and local assets. Playwright Chromium is used to render and export the final PNG. Historical render records are kept separately, so a new export does not overwrite old render metadata.
 
-The Builder currently exposes six deterministic FEED themes: `LIME`, `ELECTRIC`, `MONO`, `CHAMPIONS`, `EUROPA` and `CONFERENCE`. Team logo display can be toggled per bulletin; until safe provider asset caching is implemented, missing logos render as deterministic team initials. Footer text is configurable per bulletin for channels, social links or service branding.
+The Builder currently exposes six deterministic FEED themes: `LIME`, `ELECTRIC`, `MONO`, `CHAMPIONS`, `EUROPA` and `CONFERENCE`. Team logo display can be toggled per bulletin and set to initials or official cached logos with initials fallback. Footer text is configurable per bulletin for channels, social links or service branding.
 
 Story `1080 x 1920` rendering is future scope.
 

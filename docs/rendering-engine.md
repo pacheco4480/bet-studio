@@ -158,6 +158,7 @@ type RenderBulletinModel = {
     showBulletinCode: boolean;
     showOverallStatus?: boolean;
     showTeamLogos?: boolean;
+    teamLogoStyle?: 'INITIALS' | 'OFFICIAL';
     templateTheme?:
       | 'LIME'
       | 'ELECTRIC'
@@ -780,10 +781,16 @@ showResult
 showBulletinCode
 showOverallStatus
 showTeamLogos
+teamLogoStyle
 templateTheme
 footerText
 
 Hiding an optional field must follow template-defined behavior.
+
+`teamLogoStyle` controls whether logo containers use deterministic initials or
+cached official team logo assets. Official logos must be local/cached assets at
+render time. Missing or invalid official logos must fall back to initials rather
+than failing the render.
 
 It must not trigger arbitrary full-layout reflow.
 

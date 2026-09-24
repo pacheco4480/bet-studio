@@ -7,12 +7,21 @@ import {
   useState,
 } from 'react';
 
+type LogoAssetView = {
+  assetId: string;
+  source: 'LOCAL' | 'PROVIDER' | 'GENERATED';
+  providerCode: string | null;
+  url: string;
+};
+
 type Competition = {
   id: string;
   name: string;
   shortName: string | null;
   countryCode: string | null;
   regionName: string | null;
+  logoAssetId: string | null;
+  logo: LogoAssetView | null;
   active: boolean;
 };
 
@@ -21,6 +30,8 @@ type Team = {
   name: string;
   shortName: string | null;
   countryCode: string | null;
+  logoAssetId: string | null;
+  logo: LogoAssetView | null;
   active: boolean;
   aliases: Array<{ id: string; value: string }>;
   competitions: Competition[];
@@ -66,6 +77,8 @@ type BulletinSelectionDto = {
     homeTeamName: string;
     awayTeamName: string;
     competitionName: string | null;
+    competitionCountryCode?: string | null;
+    competitionLogo?: LogoAssetView | null;
     marketCode: string;
     marketName: string;
     kickoffAt: string | null;
@@ -192,6 +205,25 @@ type ProviderStatus = {
     competitionLogos: boolean;
   };
   lastSuccessfulSyncAt: string | null;
+};
+
+type TeamLogoProviderStatus = {
+  code: string;
+  displayName: string;
+  configured: boolean;
+  capability: 'TEAM_LOGOS';
+};
+
+type TeamLogoSyncResult = {
+  status: 'SUCCESS' | 'PARTIAL' | 'FAILED';
+  competitionsProcessed: number;
+  providerTeams: number;
+  cached: number;
+  competitionFlagsCached: number;
+  alreadyPresent: number;
+  unresolved: number;
+  unsupportedCompetitions: string[];
+  message: string | null;
 };
 
 type SyncResult = {
@@ -769,50 +801,114 @@ function SettingsPanel() {
 
 function ProviderStatusCard() {
   const [provider, setProvider] = useState<ProviderStatus | null>(null);
+  const [artworkProvider, setArtworkProvider] =
+    useState<TeamLogoProviderStatus | null>(null);
+  const [logoSync, setLogoSync] = useState<TeamLogoSyncResult | null>(null);
+  const [logoSyncLoading, setLogoSyncLoading] = useState(false);
+  const [logoSyncError, setLogoSyncError] = useState<string | null>(null);
 
   useEffect(() => {
-    void request<ProviderStatus | null>('/api/providers/goal/status')
-      .then(setProvider)
-      .catch(() => setProvider(null));
+    void Promise.all([
+      request<ProviderStatus | null>('/api/providers/goal/status').catch(
+        () => null,
+      ),
+      request<TeamLogoProviderStatus>(
+        '/api/providers/api-football/status',
+      ).catch(() => null),
+    ]).then(([goalStatus, artworkStatus]) => {
+      setProvider(goalStatus);
+      setArtworkProvider(artworkStatus);
+    });
   }, []);
 
   return (
-    <section className="rounded border border-white/10 bg-studio-panel p-4">
-      <h3 className="font-semibold">GOAL API</h3>
-      <p className="mt-1 text-sm text-slate-400">
-        {provider?.configured
-          ? `Configured${provider.lastSuccessfulSyncAt ? ` | Last sync ${provider.lastSuccessfulSyncAt}` : ''}`
-          : 'Not configured. Add GOAL_API_KEY to .env to enable provider synchronization.'}
-      </p>
-      {provider && (
-        <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          <CapabilityPill
-            label="Corners"
-            enabled={provider.capabilities?.corners === true}
-          />
-          <CapabilityPill
-            label="Team logos"
-            enabled={provider.capabilities?.teamLogos === true}
-          />
-          <CapabilityPill
-            label="Competition logos"
-            enabled={provider.capabilities?.competitionLogos === true}
-          />
+    <div className="grid gap-4 lg:grid-cols-2">
+      <section className="rounded border border-white/10 bg-studio-panel p-4">
+        <h3 className="font-semibold">GOAL API</h3>
+        <p className="mt-1 text-sm text-slate-400">
+          {provider?.configured
+            ? `Configured${provider.lastSuccessfulSyncAt ? ` | Last sync ${provider.lastSuccessfulSyncAt}` : ''}`
+            : 'Not configured. Add GOAL_API_KEY to .env to enable provider synchronization.'}
+        </p>
+        {provider && (
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <CapabilityPill
+              label="Corners"
+              enabled={provider.capabilities?.corners === true}
+            />
+            <CapabilityPill
+              label="Team logos"
+              enabled={provider.capabilities?.teamLogos === true}
+            />
+            <CapabilityPill
+              label="Competition logos"
+              enabled={provider.capabilities?.competitionLogos === true}
+            />
+          </div>
+        )}
+        {provider?.configured && provider.capabilities?.corners === false && (
+          <p className="mt-2 text-xs text-amber-200">
+            Corner markets remain manual unless you enter corner totals in
+            History.
+          </p>
+        )}
+      </section>
+
+      <section className="rounded border border-white/10 bg-studio-panel p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h3 className="font-semibold">API-Football artwork</h3>
+            <p className="mt-1 text-sm text-slate-400">
+              {artworkProvider?.configured
+                ? 'Configured for official team logos.'
+                : 'Not configured. Add API_FOOTBALL_API_KEY to .env.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            title="Download missing official team logos and competition country flags for active competitions"
+            disabled={!artworkProvider?.configured || logoSyncLoading}
+            className="rounded bg-studio-lime px-4 py-2 text-sm font-semibold text-black disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => {
+              setLogoSyncLoading(true);
+              setLogoSync(null);
+              setLogoSyncError(null);
+              void request<TeamLogoSyncResult>('/api/sync/team-logos', {
+                method: 'POST',
+              })
+                .then(setLogoSync)
+                .catch((error: Error) => setLogoSyncError(error.message))
+                .finally(() => setLogoSyncLoading(false));
+            }}
+          >
+            {logoSyncLoading
+              ? 'Updating artwork...'
+              : 'Update official artwork'}
+          </button>
         </div>
-      )}
-      {provider?.configured && provider.capabilities?.corners === false && (
-        <p className="mt-2 text-xs text-amber-200">
-          Corner markets remain manual unless you enter corner totals in
-          History.
-        </p>
-      )}
-      {provider?.configured && provider.capabilities?.teamLogos === false && (
-        <p className="mt-1 text-xs text-slate-500">
-          Provider logo URLs are not imported yet; rendered logos use the local
-          initials fallback.
-        </p>
-      )}
-    </section>
+        {logoSync && (
+          <div className="mt-3 grid gap-1 text-sm text-slate-300" role="status">
+            <p>
+              {logoSync.status}: {logoSync.cached} cached,{' '}
+              {logoSync.competitionFlagsCached} flags cached,{' '}
+              {logoSync.alreadyPresent} already present, {logoSync.unresolved}{' '}
+              unresolved across {logoSync.competitionsProcessed} competitions.
+              {logoSync.unsupportedCompetitions.length > 0
+                ? ` Unsupported: ${logoSync.unsupportedCompetitions.join(', ')}.`
+                : ''}
+            </p>
+            {logoSync.message && (
+              <p className="text-amber-200">{logoSync.message}</p>
+            )}
+          </div>
+        )}
+        {logoSyncError && (
+          <p className="mt-3 text-sm text-red-300" role="alert">
+            {logoSyncError}
+          </p>
+        )}
+      </section>
+    </div>
   );
 }
 
@@ -940,6 +1036,7 @@ const defaultDraft: BulletinDraft = {
     showBulletinCode: true,
     showOverallStatus: true,
     showTeamLogos: true,
+    teamLogoStyle: 'INITIALS',
     templateTheme: 'LIME',
     footerText: 'Deterministic FEED 1080x1350',
   },
@@ -962,6 +1059,9 @@ function BulletinsPanel(props: {
   const [lastRender, setLastRender] = useState<RenderResult | null>(null);
   const [includeOldFixtures, setIncludeOldFixtures] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectionErrors, setSelectionErrors] = useState<
+    Record<number, string>
+  >({});
 
   const load = useCallback(async () => {
     const [
@@ -1019,20 +1119,32 @@ function BulletinsPanel(props: {
 
   async function saveDraft() {
     setError(null);
+    setSelectionErrors({});
     const incompleteSelectionIndex = draft.selections.findIndex(
       (selection) =>
         !selection.fixtureId || !selection.marketId || !selection.odd.trim(),
     );
     if (incompleteSelectionIndex >= 0) {
-      setError(
-        `Complete fixture, market and odd for selection ${incompleteSelectionIndex + 1}`,
-      );
+      setSelectionErrors({
+        [incompleteSelectionIndex]:
+          'Complete fixture, market and odd for this selection',
+      });
       setSaveState('Unsaved');
       return;
     }
     const duplicateFixtureId = findDuplicateFixtureId(draft.selections);
     if (duplicateFixtureId) {
-      setError('Each fixture can only be used once in the same bulletin');
+      setSelectionErrors(
+        draft.selections.reduce<Record<number, string>>(
+          (errors, selection, index) => {
+            if (selection.fixtureId === duplicateFixtureId) {
+              errors[index] = 'This fixture is already used in this bulletin';
+            }
+            return errors;
+          },
+          {},
+        ),
+      );
       setSaveState('Unsaved');
       return;
     }
@@ -1151,7 +1263,7 @@ function BulletinsPanel(props: {
             <strong className="text-xl text-white">{totalOdd}</strong>
           </div>
         </div>
-        <div className="grid gap-3 md:grid-cols-[220px_minmax(220px,1fr)_1fr]">
+        <div className="grid gap-3 md:grid-cols-[220px_220px_minmax(220px,1fr)]">
           <label className="text-sm text-slate-300">
             Template
             <select
@@ -1178,6 +1290,28 @@ function BulletinsPanel(props: {
               <option value="CONFERENCE">Conference Green</option>
             </select>
           </label>
+          <label className="text-sm text-slate-300">
+            Logo style
+            <select
+              className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-white disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+              value={String(draft.renderConfig.teamLogoStyle ?? 'INITIALS')}
+              disabled={!renderToggleValue(draft.renderConfig, 'showTeamLogos')}
+              title="Official logos are used in exported PNGs when a cached provider logo exists. Initials are used as fallback."
+              onChange={(event) => {
+                setDraft({
+                  ...draft,
+                  renderConfig: {
+                    ...draft.renderConfig,
+                    teamLogoStyle: event.target.value,
+                  },
+                });
+                setSaveState('Unsaved');
+              }}
+            >
+              <option value="INITIALS">Initials</option>
+              <option value="OFFICIAL">Official logos</option>
+            </select>
+          </label>
           <TextInput
             label="Footer text"
             value={String(
@@ -1194,7 +1328,7 @@ function BulletinsPanel(props: {
               setSaveState('Unsaved');
             }}
           />
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3 md:col-span-3">
             {renderToggleLabels.map(([key, label]) => (
               <label
                 key={key}
@@ -1275,7 +1409,13 @@ function BulletinsPanel(props: {
                 .map((item) => item.fixtureId)
                 .filter(Boolean)}
               canRemove={draft.selections.length > 1}
+              error={selectionErrors[index] ?? null}
               onChange={(next) => {
+                setSelectionErrors((current) => {
+                  const nextErrors = { ...current };
+                  delete nextErrors[index];
+                  return nextErrors;
+                });
                 setDraft({
                   ...draft,
                   selections: draft.selections.map((item, itemIndex) =>
@@ -1285,6 +1425,7 @@ function BulletinsPanel(props: {
                 setSaveState('Unsaved');
               }}
               onRemove={() => {
+                setSelectionErrors({});
                 setDraft({
                   ...draft,
                   selections: draft.selections.filter(
@@ -1298,6 +1439,7 @@ function BulletinsPanel(props: {
                 const target = index + direction;
                 if (target < 0 || target >= next.length) return;
                 [next[index], next[target]] = [next[target], next[index]];
+                setSelectionErrors({});
                 setDraft({ ...draft, selections: next });
                 setSaveState('Unsaved');
               }}
@@ -1612,10 +1754,16 @@ function SelectionEditor(props: {
   markets: Market[];
   selectedFixtureIds: string[];
   canRemove: boolean;
+  error: string | null;
   onChange: (selection: DraftSelection) => void;
   onRemove: () => void;
   onMove: (direction: -1 | 1) => void;
 }) {
+  const fixtureGroups = useMemo(
+    () => groupFixtureOptions(props.fixtures),
+    [props.fixtures],
+  );
+
   return (
     <article className="grid gap-4 rounded border border-white/10 bg-studio-panel p-4">
       <div className="flex items-center justify-between gap-3">
@@ -1659,17 +1807,22 @@ function SelectionEditor(props: {
             }
           >
             <option value="">Select fixture</option>
-            {props.fixtures.map((item) => (
-              <option
-                key={item.fixture.id}
-                value={item.fixture.id}
-                disabled={props.selectedFixtureIds.includes(item.fixture.id)}
-              >
-                {formatFixtureDateTime(item.fixture.kickoffAt)} |{' '}
-                {item.homeTeam.name} vs {item.awayTeam.name} |{' '}
-                {item.competition?.name ?? 'No competition'} |{' '}
-                {item.fixture.status}
-              </option>
+            {fixtureGroups.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.items.map((item) => (
+                  <option
+                    key={item.fixture.id}
+                    value={item.fixture.id}
+                    disabled={props.selectedFixtureIds.includes(
+                      item.fixture.id,
+                    )}
+                  >
+                    {formatFixtureDateTime(item.fixture.kickoffAt)} |{' '}
+                    {item.homeTeam.name} vs {item.awayTeam.name} |{' '}
+                    {item.fixture.status}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </label>
@@ -1707,6 +1860,11 @@ function SelectionEditor(props: {
           required
         />
       </div>
+      {props.error && (
+        <p className="rounded border border-red-400/30 bg-red-950/30 px-3 py-2 text-sm text-red-100">
+          {props.error}
+        </p>
+      )}
     </article>
   );
 }
@@ -1726,6 +1884,9 @@ function BulletinPreview(props: {
   const showTeamLogos = renderToggleValue(
     props.draft.renderConfig,
     'showTeamLogos',
+  );
+  const teamLogoStyle = String(
+    props.draft.renderConfig.teamLogoStyle ?? 'INITIALS',
   );
   const selections =
     props.saved?.selections ??
@@ -1749,6 +1910,8 @@ function BulletinPreview(props: {
           homeTeamName: fixture?.homeTeam.name ?? 'Home team',
           awayTeamName: fixture?.awayTeam.name ?? 'Away team',
           competitionName: fixture?.competition?.name ?? null,
+          competitionCountryCode: fixture?.competition?.countryCode ?? null,
+          competitionLogo: fixture?.competition?.logo ?? null,
           marketCode: market?.code ?? '',
           marketName: market?.name ?? 'Market',
           kickoffAt: fixture?.fixture.kickoffAt ?? null,
@@ -1761,7 +1924,7 @@ function BulletinPreview(props: {
 
   return (
     <aside
-      className={`grid content-start gap-3 rounded border p-4 ${themeClasses.shell}`}
+      className={`grid w-full max-w-[500px] content-start gap-3 justify-self-start rounded border p-5 ${themeClasses.shell}`}
     >
       <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
         <div>
@@ -1786,7 +1949,26 @@ function BulletinPreview(props: {
           >
             <div className="flex justify-between gap-3 text-sm text-slate-400">
               {props.draft.renderConfig.showCompetition && (
-                <span>{item.snapshot.competitionName ?? 'No competition'}</span>
+                <span className="flex min-w-0 items-center gap-2">
+                  <PreviewCompetitionLogo
+                    name={item.snapshot.competitionName}
+                    countryCode={
+                      'competitionCountryCode' in item.snapshot
+                        ? item.snapshot.competitionCountryCode
+                        : item.fixture?.competition?.countryCode
+                    }
+                    logo={
+                      'competitionLogo' in item.snapshot
+                        ? item.snapshot.competitionLogo
+                        : item.fixture?.competition?.logo
+                    }
+                    logoStyle={teamLogoStyle}
+                    themeClasses={themeClasses}
+                  />
+                  <span className="truncate">
+                    {item.snapshot.competitionName ?? 'No competition'}
+                  </span>
+                </span>
               )}
               {props.draft.renderConfig.showResult && (
                 <span>{item.effectiveStatus}</span>
@@ -1795,7 +1977,9 @@ function BulletinPreview(props: {
             <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
               <PreviewTeam
                 name={item.snapshot.homeTeamName}
+                logo={item.fixture?.homeTeam.logo ?? null}
                 showLogo={showTeamLogos}
+                logoStyle={teamLogoStyle}
                 themeClasses={themeClasses}
                 align="home"
               />
@@ -1804,14 +1988,24 @@ function BulletinPreview(props: {
               </span>
               <PreviewTeam
                 name={item.snapshot.awayTeamName}
+                logo={item.fixture?.awayTeam.logo ?? null}
                 showLogo={showTeamLogos}
+                logoStyle={teamLogoStyle}
                 themeClasses={themeClasses}
                 align="away"
               />
             </div>
-            <p className="text-sm text-slate-300">{item.snapshot.marketName}</p>
-            <div className="flex justify-between gap-3 text-sm">
-              <span>Odd {item.selection.odd}</span>
+            <div className="flex items-end justify-between gap-3 text-sm">
+              <span className="min-w-0 truncate text-slate-200">
+                {item.snapshot.marketName}
+              </span>
+              <strong className="grid shrink-0 text-right text-studio-lime">
+                <span className="text-[10px] text-slate-400">ODD</span>
+                {item.selection.odd}
+              </strong>
+            </div>
+            <div className="flex justify-between gap-3 text-sm text-slate-400">
+              <span>-</span>
               {props.draft.renderConfig.showDate && item.snapshot.kickoffAt && (
                 <span>
                   {new Date(item.snapshot.kickoffAt).toLocaleDateString()}
@@ -1822,8 +2016,8 @@ function BulletinPreview(props: {
         ))}
       </div>
       <div className="flex justify-between border-t border-white/10 pt-3 text-sm">
-        {props.draft.renderConfig.showStake && (
-          <span>Stake {props.draft.stake || '-'}</span>
+        {props.draft.renderConfig.showStake && props.draft.stake && (
+          <span>Stake {props.draft.stake}</span>
         )}
         <div className="text-right">
           {props.draft.renderConfig.showTotalOdd && (
@@ -1908,37 +2102,53 @@ function previewThemeClasses(theme: RenderTheme) {
 
 function PreviewTeam(props: {
   name: string;
+  logo: LogoAssetView | null;
   showLogo: boolean;
+  logoStyle: string;
   themeClasses: ReturnType<typeof previewThemeClasses>;
   align: 'home' | 'away';
 }) {
-  const textAlign = props.align === 'home' ? 'text-right' : 'text-left';
+  const textAlign = props.align === 'home' ? 'text-left' : 'text-right';
+  const officialLogo =
+    props.logoStyle === 'OFFICIAL' && props.logo ? props.logo : null;
+  const logo = (
+    <span
+      className={`grid h-6 w-6 shrink-0 place-items-center overflow-hidden rounded-full border text-[9px] font-black ${
+        props.logoStyle === 'OFFICIAL'
+          ? `${props.themeClasses.logo} ring-1 ring-white/25`
+          : props.themeClasses.logo
+      }`}
+      title={
+        props.logoStyle === 'OFFICIAL'
+          ? 'Official logo in PNG export when available; initials fallback in preview.'
+          : 'Team initials'
+      }
+    >
+      {officialLogo ? (
+        <img
+          src={officialLogo.url}
+          alt=""
+          className="h-full w-full object-contain"
+        />
+      ) : (
+        teamInitials(props.name)
+      )}
+    </span>
+  );
   const content =
     props.align === 'home' ? (
       <>
+        {props.showLogo && logo}
         <span className={`min-w-0 truncate font-semibold ${textAlign}`}>
           {props.name}
         </span>
-        {props.showLogo && (
-          <span
-            className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border text-xs font-black ${props.themeClasses.logo}`}
-          >
-            {teamInitials(props.name)}
-          </span>
-        )}
       </>
     ) : (
       <>
-        {props.showLogo && (
-          <span
-            className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border text-xs font-black ${props.themeClasses.logo}`}
-          >
-            {teamInitials(props.name)}
-          </span>
-        )}
         <span className={`min-w-0 truncate font-semibold ${textAlign}`}>
           {props.name}
         </span>
+        {props.showLogo && logo}
       </>
     );
 
@@ -1946,11 +2156,62 @@ function PreviewTeam(props: {
     <div
       className={`flex min-w-0 items-center gap-2 ${
         props.align === 'home' ? 'justify-end' : 'justify-start'
-      }`}
+      } text-sm`}
     >
       {content}
     </div>
   );
+}
+
+function PreviewCompetitionLogo(props: {
+  name: string | null;
+  countryCode: string | null | undefined;
+  logo: LogoAssetView | null | undefined;
+  logoStyle: string;
+  themeClasses: ReturnType<typeof previewThemeClasses>;
+}) {
+  const officialLogo =
+    props.logoStyle === 'OFFICIAL' && props.logo ? props.logo : null;
+  const label = props.countryCode ?? props.name ?? 'Competition';
+  return (
+    <span
+      className={`grid shrink-0 place-items-center overflow-hidden border text-[8px] font-black ${
+        officialLogo ? 'h-4 w-6 rounded-sm' : 'h-5 w-5 rounded-full'
+      } ${props.themeClasses.logo}`}
+      title={props.name ?? 'No competition'}
+    >
+      {officialLogo ? (
+        <img
+          src={officialLogo.url}
+          alt=""
+          className="h-full w-full object-contain"
+        />
+      ) : (
+        teamInitials(label)
+      )}
+    </span>
+  );
+}
+
+function groupFixtureOptions(fixtures: FixtureOption[]): Array<{
+  label: string;
+  items: FixtureOption[];
+}> {
+  const groups = new Map<string, FixtureOption[]>();
+  for (const fixture of fixtures) {
+    const label = fixture.competition?.name ?? 'No competition';
+    groups.set(label, [...(groups.get(label) ?? []), fixture]);
+  }
+  return [...groups.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([label, items]) => ({
+      label,
+      items: [...items].sort((left, right) =>
+        (left.fixture.kickoffAt ?? '').localeCompare(
+          right.fixture.kickoffAt ?? '',
+        ),
+      ),
+    }));
 }
 
 function teamInitials(name: string): string {
@@ -2151,7 +2412,7 @@ function HistoryPanel(props: { onEdit: (id: string) => void }) {
         />
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[360px_1fr]">
+      <section className="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(280px,340px)_minmax(0,1fr)]">
         <div className="grid content-start gap-3">
           <div className="flex items-center justify-between gap-3 text-sm text-slate-400">
             <span>
@@ -2208,7 +2469,7 @@ function HistoryPanel(props: { onEdit: (id: string) => void }) {
         </div>
 
         {detail ? (
-          <section className="grid gap-4 rounded border border-white/10 bg-studio-panel p-4">
+          <section className="grid min-w-0 content-start gap-4 rounded border border-white/10 bg-studio-panel p-4">
             <div className="flex flex-col gap-3 border-b border-white/10 pb-4 md:flex-row md:items-start md:justify-between">
               <div>
                 <p className="text-sm text-studio-lime">
@@ -2248,6 +2509,62 @@ function HistoryPanel(props: { onEdit: (id: string) => void }) {
                   }
                 >
                   Duplicate
+                </button>
+                <button
+                  type="button"
+                  className="rounded bg-studio-lime px-3 py-2 text-sm font-semibold text-black"
+                  disabled={action !== null}
+                  title="Refresh provider results for every synced fixture in this bulletin, then recalculate all selections."
+                  onClick={() =>
+                    void runAction('Refresh all provider results', async () => {
+                      const syncedFixtureIds = [
+                        ...new Set(
+                          detail.selections
+                            .map((item) =>
+                              item.fixture?.fixture.sourceType === 'SYNCED'
+                                ? item.fixture.fixture.id
+                                : null,
+                            )
+                            .filter((id): id is string => Boolean(id)),
+                        ),
+                      ];
+                      if (syncedFixtureIds.length === 0) {
+                        setMessage(
+                          'No synced fixtures found in this bulletin.',
+                        );
+                        return;
+                      }
+                      const results = await Promise.all(
+                        syncedFixtureIds.map((fixtureId) =>
+                          request<SyncResult>(
+                            `/api/sync/fixtures/${fixtureId}/result`,
+                            { method: 'POST' },
+                          ),
+                        ),
+                      );
+                      await request<BulletinEvaluationResult>(
+                        `/api/bulletins/${detail.bulletin.id}/evaluate`,
+                        { method: 'POST' },
+                      );
+                      const updated = results.reduce(
+                        (sum, result) => sum + result.updated,
+                        0,
+                      );
+                      const unresolved = results.reduce(
+                        (sum, result) => sum + result.unresolved,
+                        0,
+                      );
+                      const failed = results.reduce(
+                        (sum, result) => sum + result.failed,
+                        0,
+                      );
+                      setMessage(
+                        `Provider results refreshed: ${updated} updated, ${unresolved} unresolved, ${failed} failed across ${syncedFixtureIds.length} fixtures.`,
+                      );
+                    })
+                  }
+                >
+                  Refresh all provider results
                 </button>
                 <button
                   type="button"
@@ -2798,6 +3115,7 @@ function CompetitionsPanel() {
     <CatalogSection title="Competitions" error={error}>
       <SyncPanel
         actionLabel="Refresh GOAL API competitions"
+        note="This refresh updates competition names, countries and provider mappings. Official flags/logos are updated from Home using Update official artwork."
         onSync={() =>
           request<SyncResult>('/api/sync/competitions', {
             method: 'POST',
@@ -2837,8 +3155,21 @@ function CompetitionsPanel() {
                 .filter(Boolean)
                 .join(' | ') || 'No metadata'
             }
+            leading={<EntityLogo name={item.name} logo={item.logo} />}
             active={item.active}
-            onEdit={() => setEditing(item)}
+            logo={item.logo}
+            onLogoChange={(file) =>
+              uploadEntityLogo('competitions', item.id, file).then(load)
+            }
+            onLogoRemove={() =>
+              request(`/api/competitions/${item.id}/logo`, {
+                method: 'DELETE',
+              }).then(load)
+            }
+            onEdit={() => {
+              setEditing(item);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
             onToggle={() =>
               void request(`/api/competitions/${item.id}`, {
                 method: 'PATCH',
@@ -3085,7 +3416,18 @@ function TeamsPanel() {
                 <TeamCard
                   key={`${competitionName}-${item.id}`}
                   team={item}
-                  onEdit={() => setEditing(item)}
+                  onLogoChange={(file) =>
+                    uploadEntityLogo('teams', item.id, file).then(load)
+                  }
+                  onLogoRemove={() =>
+                    request(`/api/teams/${item.id}/logo`, {
+                      method: 'DELETE',
+                    }).then(load)
+                  }
+                  onEdit={() => {
+                    setEditing(item);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
                   onToggle={() =>
                     void request(`/api/teams/${item.id}`, {
                       method: 'PATCH',
@@ -3650,6 +3992,7 @@ function SyncPanel(props: {
   actionLabel: string;
   children?: React.ReactNode;
   disabled?: boolean;
+  note?: string;
   onSync: () => Promise<SyncResult>;
   onSynced?: () => Promise<void>;
 }) {
@@ -3713,6 +4056,7 @@ function SyncPanel(props: {
           </span>
         </p>
       )}
+      {props.note && <p className="text-sm text-slate-400">{props.note}</p>}
       {error && <p className="text-sm text-red-200">{error}</p>}
     </section>
   );
@@ -3814,7 +4158,7 @@ function CatalogSection(props: {
   children: React.ReactNode;
 }) {
   return (
-    <section className="grid gap-6 py-8">
+    <section className="grid min-w-0 gap-6 py-8">
       <h2 className="text-2xl font-semibold">{props.title}</h2>
       {props.error && (
         <p className="rounded border border-red-400/40 bg-red-950/40 p-3 text-sm text-red-100">
@@ -3876,17 +4220,34 @@ function TextInput(props: {
 function CatalogCard(props: {
   title: string;
   subtitle: string;
+  leading?: ReactNode;
+  logo?: LogoAssetView | null;
   active: boolean;
+  onLogoChange?: (file: File) => Promise<void>;
+  onLogoRemove?: () => Promise<unknown>;
   onEdit: () => void;
   onToggle: () => void;
 }) {
   return (
-    <article className="flex items-center justify-between gap-4 rounded border border-white/10 bg-black/20 p-4">
-      <div>
-        <h3 className="font-semibold">{props.title}</h3>
-        <p className="mt-1 text-sm text-slate-400">{props.subtitle}</p>
+    <article className="flex flex-col items-stretch gap-4 rounded border border-white/10 bg-black/20 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-center gap-3">
+        {props.leading}
+        <div className="min-w-0">
+          <h3 className="break-words font-semibold">{props.title}</h3>
+          <p className="mt-1 break-words text-sm text-slate-400">
+            {props.subtitle}
+          </p>
+        </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {props.onLogoChange && props.onLogoRemove && (
+          <LogoActions
+            name={props.title}
+            hasLogo={Boolean(props.logo)}
+            onChange={props.onLogoChange}
+            onRemove={props.onLogoRemove}
+          />
+        )}
         <span
           className={`text-xs font-semibold ${props.active ? 'text-studio-lime' : 'text-slate-500'}`}
         >
@@ -3913,6 +4274,8 @@ function CatalogCard(props: {
 
 function TeamCard(props: {
   team: Team;
+  onLogoChange: (file: File) => Promise<void>;
+  onLogoRemove: () => Promise<unknown>;
   onEdit: () => void;
   onToggle: () => void;
   onRemoveAlias: (aliasId: string) => void;
@@ -3929,15 +4292,18 @@ function TeamCard(props: {
   return (
     <article className="grid gap-4 rounded border border-white/10 bg-black/20 p-4 md:grid-cols-[1fr_auto]">
       <div className="grid gap-3">
-        <div>
-          <h3 className="font-semibold">{props.team.name}</h3>
-          {metadata ? (
-            <p className="mt-1 text-sm text-slate-400">{metadata}</p>
-          ) : (
-            <p className="mt-1 text-xs text-slate-500">
-              No extra details saved yet
-            </p>
-          )}
+        <div className="flex min-w-0 items-center gap-3">
+          <EntityLogo name={props.team.name} logo={props.team.logo} />
+          <div className="min-w-0">
+            <h3 className="break-words font-semibold">{props.team.name}</h3>
+            {metadata ? (
+              <p className="mt-1 text-sm text-slate-400">{metadata}</p>
+            ) : (
+              <p className="mt-1 text-xs text-slate-500">
+                No extra details saved yet
+              </p>
+            )}
+          </div>
         </div>
         {hasDetails && (
           <details className="rounded border border-white/10 bg-black/20 p-3">
@@ -3969,7 +4335,13 @@ function TeamCard(props: {
           </details>
         )}
       </div>
-      <div className="flex items-start gap-2">
+      <div className="flex flex-wrap items-start gap-2">
+        <LogoActions
+          name={props.team.name}
+          hasLogo={Boolean(props.team.logo)}
+          onChange={props.onLogoChange}
+          onRemove={props.onLogoRemove}
+        />
         <span
           className={`pt-2 text-xs font-semibold ${props.team.active ? 'text-studio-lime' : 'text-slate-500'}`}
         >
@@ -3992,6 +4364,130 @@ function TeamCard(props: {
       </div>
     </article>
   );
+}
+
+function EntityLogo(props: { name: string; logo: LogoAssetView | null }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const showImage = Boolean(props.logo && !imageFailed);
+  const sourceLabel = showImage
+    ? props.logo?.providerCode === 'API_FOOTBALL'
+      ? 'API-Football'
+      : props.logo?.source === 'LOCAL'
+        ? 'Manual'
+        : props.logo?.source === 'GENERATED'
+          ? 'Generated'
+          : 'Provider'
+    : 'Initials';
+
+  useEffect(() => setImageFailed(false), [props.logo?.assetId]);
+
+  return (
+    <div className="grid shrink-0 justify-items-center gap-1">
+      <div className="grid h-14 w-14 place-items-center overflow-hidden rounded border border-white/10 bg-studio-ink p-1">
+        {showImage ? (
+          <img
+            src={props.logo!.url}
+            alt={`${props.name} logo`}
+            className="h-full w-full object-contain"
+            loading="lazy"
+            onError={() => setImageFailed(true)}
+          />
+        ) : (
+          <span
+            className="text-sm font-bold text-studio-lime"
+            aria-label={`${props.name} initials fallback`}
+          >
+            {entityInitials(props.name)}
+          </span>
+        )}
+      </div>
+      <span className="max-w-20 truncate text-[10px] font-semibold text-slate-500">
+        {sourceLabel}
+      </span>
+    </div>
+  );
+}
+
+function LogoActions(props: {
+  name: string;
+  hasLogo: boolean;
+  onChange: (file: File) => Promise<void>;
+  onRemove: () => Promise<unknown>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <label className="cursor-pointer rounded border border-white/10 px-3 py-2 text-sm focus-within:outline focus-within:outline-2 focus-within:outline-studio-lime">
+        {busy ? 'Processing...' : props.hasLogo ? 'Replace logo' : 'Add logo'}
+        <input
+          className="sr-only"
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          disabled={busy}
+          aria-label={`${props.hasLogo ? 'Replace' : 'Add'} ${props.name} logo`}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (!file) return;
+            setBusy(true);
+            setError(null);
+            void props
+              .onChange(file)
+              .catch((err: Error) => setError(err.message))
+              .finally(() => setBusy(false));
+          }}
+        />
+      </label>
+      {props.hasLogo && (
+        <button
+          type="button"
+          className="rounded border border-white/10 px-3 py-2 text-sm disabled:opacity-60"
+          disabled={busy}
+          onClick={() => {
+            setBusy(true);
+            setError(null);
+            void props
+              .onRemove()
+              .catch((err: Error) => setError(err.message))
+              .finally(() => setBusy(false));
+          }}
+        >
+          Remove logo
+        </button>
+      )}
+      {error && <span className="text-xs text-red-200">{error}</span>}
+    </div>
+  );
+}
+
+async function uploadEntityLogo(
+  entityType: 'competitions' | 'teams',
+  entityId: string,
+  file: File,
+): Promise<void> {
+  if (file.size > 2_000_000)
+    throw new Error('Logo image must be smaller than 2 MB');
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') resolve(reader.result);
+      else reject(new Error('Logo image could not be read'));
+    };
+    reader.onerror = () => reject(new Error('Logo image could not be read'));
+    reader.readAsDataURL(file);
+  });
+  await request(`/api/${entityType}/${entityId}/logo`, {
+    method: 'POST',
+    body: JSON.stringify({ dataUrl }),
+  });
+}
+
+function entityInitials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '?';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return `${words[0][0]}${words.at(-1)?.[0] ?? ''}`.toUpperCase();
 }
 
 function TokenList(props: {

@@ -609,6 +609,7 @@ type BulletinRenderConfig = {
   showBulletinCode: boolean;
   showOverallStatus?: boolean;
   showTeamLogos?: boolean;
+  teamLogoStyle?: 'INITIALS' | 'OFFICIAL';
   templateTheme?:
     | 'LIME'
     | 'ELECTRIC'
@@ -618,6 +619,10 @@ type BulletinRenderConfig = {
     | 'CONFERENCE';
   footerText?: string;
 };
+
+`teamLogoStyle` is a bulletin-level display preference. Official team logos
+still resolve through saved selection logo asset IDs and local asset records;
+missing assets use initials as the deterministic fallback.
 
 Do not store calculated layout coordinates here unless they are intentionally part of a persisted rendering contract.
 

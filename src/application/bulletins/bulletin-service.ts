@@ -9,6 +9,7 @@ import type {
   BulletinStatus,
   BulletinType,
   Competition,
+  Asset,
   Fixture,
   Market,
   SelectionResultSnapshot,
@@ -24,6 +25,7 @@ import {
 } from '../../domain/shared/decimal.js';
 import { createId } from '../../domain/shared/ids.js';
 import type {
+  AssetId,
   BulletinId,
   FixtureId,
   MarketId,
@@ -72,6 +74,7 @@ export type BulletinRepository = {
   findById(id: BulletinId): BulletinAggregateDto | null;
   list(): BulletinListItem[];
   saveReplacingAggregate(aggregate: BulletinAggregateDto): void;
+  findAsset?(id: AssetId): Asset | null;
   getFixtureContext(id: FixtureId): FixtureOption | null;
   getMarket(id: MarketId): Market | null;
   listFixtures(input: {
@@ -98,6 +101,7 @@ const displayOptionsSchema = z
     showBulletinCode: z.boolean(),
     showOverallStatus: z.boolean(),
     showTeamLogos: z.boolean(),
+    teamLogoStyle: z.enum(['INITIALS', 'OFFICIAL']),
     templateTheme: z.enum([
       'LIME',
       'ELECTRIC',
@@ -153,6 +157,7 @@ const defaultRenderConfig: BulletinRenderConfig = {
   showBulletinCode: true,
   showOverallStatus: true,
   showTeamLogos: true,
+  teamLogoStyle: 'INITIALS',
   templateTheme: 'LIME',
   footerText: 'Deterministic FEED 1080x1350',
 };

@@ -171,6 +171,22 @@ export class DrizzleSyncRepository implements SyncRepository {
     );
   }
 
+  listTeamsForCompetition(competitionId: CompetitionId): Team[] {
+    return this.db
+      .select({ team: teams })
+      .from(competitionTeams)
+      .innerJoin(teams, eq(teams.id, competitionTeams.teamId))
+      .where(
+        and(
+          eq(competitionTeams.competitionId, competitionId),
+          eq(competitionTeams.active, true),
+          eq(teams.active, true),
+        ),
+      )
+      .all()
+      .map((row) => row.team as Team);
+  }
+
   findFixture(
     id: FixtureId,
   ): { fixture: Fixture; details: FixtureResultDetails | null } | null {

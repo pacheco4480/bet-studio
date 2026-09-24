@@ -8,7 +8,11 @@ import type {
   RenderRecord,
 } from '../../domain/core/types.js';
 import { createId } from '../../domain/shared/ids.js';
-import type { BulletinId, RenderRecordId } from '../../domain/shared/ids.js';
+import type {
+  AssetId,
+  BulletinId,
+  RenderRecordId,
+} from '../../domain/shared/ids.js';
 import { nowUtc } from '../../domain/shared/time.js';
 import {
   NotFoundError,
@@ -62,7 +66,7 @@ export class RenderingService {
     if (!aggregate) throw new NotFoundError('Bulletin not found');
 
     const template = this.getTemplate(aggregate.bulletin.templateVersion);
-    const model = mapBulletinToRenderModel(aggregate, template);
+    const model = await this.mapBulletinToRenderModel(aggregate, template);
     const plan = createRenderPlan(model, template);
     validateRenderPlan(plan);
     const renderInputHash = stableHash({ model, template });
@@ -185,6 +189,65 @@ export class RenderingService {
       throw error;
     }
   }
+
+  private async mapBulletinToRenderModel(
+    aggregate: BulletinAggregateDto,
+    template: RenderTemplateVersion,
+  ): Promise<BulletinRenderModel> {
+    const model = mapBulletinToRenderModel(aggregate, template);
+    if (aggregate.bulletin.renderConfig.teamLogoStyle !== 'OFFICIAL') {
+      return model;
+    }
+
+    for (const [index, item] of aggregate.selections.entries()) {
+      const selection = model.selections[index];
+      if (!selection) continue;
+      selection.homeTeam.logo = await this.resolveAssetLogo(
+        item.snapshot.homeTeamLogoAssetId,
+        'TEAM_LOGO',
+      );
+      selection.awayTeam.logo = await this.resolveAssetLogo(
+        item.snapshot.awayTeamLogoAssetId,
+        'TEAM_LOGO',
+      );
+      selection.competitionLogo = await this.resolveAssetLogo(
+        item.fixture?.competition?.logoAssetId ?? null,
+        'COMPETITION_LOGO',
+      );
+    }
+    return model;
+  }
+
+  private async resolveAssetLogo(
+    assetId: string | null,
+    assetType: 'TEAM_LOGO' | 'COMPETITION_LOGO',
+  ) {
+    if (!assetId || !this.bulletins.findAsset) return null;
+    const asset = this.bulletins.findAsset(assetId as AssetId);
+    if (
+      !asset ||
+      asset.type !== assetType ||
+      !asset.contentHash ||
+      !asset.mimeType ||
+      !['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'].includes(
+        asset.mimeType,
+      )
+    ) {
+      return null;
+    }
+    try {
+      const { readFile } = await import('node:fs/promises');
+      const file = await readFile(asset.filePath);
+      return {
+        assetId: asset.id,
+        contentHash: asset.contentHash,
+        mimeType: asset.mimeType,
+        resolvedPath: `data:${asset.mimeType};base64,${file.toString('base64')}`,
+      };
+    } catch {
+      return null;
+    }
+  }
 }
 
 function mapBulletinToRenderModel(
@@ -226,6 +289,8 @@ function mapBulletinToRenderModel(
           logo: null,
         },
         competitionName: item.snapshot.competitionName,
+        competitionCountryCode: item.fixture?.competition?.countryCode ?? null,
+        competitionLogo: null,
         marketCode: item.snapshot.marketCode,
         marketName: item.snapshot.marketName,
         odd: item.selection.odd,

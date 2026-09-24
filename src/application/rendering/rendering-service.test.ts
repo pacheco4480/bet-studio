@@ -1,8 +1,12 @@
 // @vitest-environment node
 
 import { afterEach, describe, expect, it } from 'vitest';
+import { writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { join } from 'node:path';
+import { eq } from 'drizzle-orm';
 import type {
+  Asset,
   Competition,
   Fixture,
   Market,
@@ -16,7 +20,11 @@ import { DrizzleCompetitionRepository } from '../../infrastructure/database/repo
 import { DrizzleFixtureRepository } from '../../infrastructure/database/repositories/fixture-repository.js';
 import { DrizzleMarketRepository } from '../../infrastructure/database/repositories/market-repository.js';
 import { DrizzleTeamRepository } from '../../infrastructure/database/repositories/team-repository.js';
-import { selectionResultSnapshots } from '../../infrastructure/database/schema.js';
+import {
+  assets,
+  selectionResultSnapshots,
+  teams as teamsTable,
+} from '../../infrastructure/database/schema.js';
 import {
   createMigratedTestDatabase,
   type TestDatabase,
@@ -71,6 +79,8 @@ describe('rendering', () => {
             },
             awayTeam: { name: 'Away City', shortName: null, logo: null },
             competitionName: 'Liga Portugal',
+            competitionCountryCode: 'PT',
+            competitionLogo: null,
             marketCode: 'OVER_2_5',
             marketName: 'Over 2.5 Goals',
             odd: '1.50',
@@ -217,6 +227,7 @@ describe('rendering', () => {
       mode: 'PRE_MATCH',
       renderConfig: {
         showTeamLogos: false,
+        teamLogoStyle: 'INITIALS',
         templateTheme: 'CHAMPIONS',
         footerText: 't.me/betstudio',
       },
@@ -232,8 +243,75 @@ describe('rendering', () => {
     await service.renderBulletin(bulletin.bulletin.id);
 
     expect(renderer.lastModel?.display.showTeamLogos).toBe(false);
+    expect(renderer.lastModel?.display.teamLogoStyle).toBe('INITIALS');
     expect(renderer.lastModel?.display.templateTheme).toBe('CHAMPIONS');
     expect(renderer.lastModel?.display.footerText).toBe('t.me/betstudio');
+  });
+
+  it('resolves official team logo assets for render output', async () => {
+    database = createMigratedTestDatabase();
+    const bulletinRepository = new DrizzleBulletinBuilderRepository(
+      database.db,
+    );
+    const renderer = new FakeRenderer();
+    const service = new RenderingService(
+      bulletinRepository,
+      new MemoryRenderRecordRepository(),
+      renderer,
+      dirname(database.path),
+    );
+    const bulletinService = new BulletinService(bulletinRepository);
+    const seed = seedCatalog(database);
+    const logoPath = join(dirname(database.path), 'home-logo.png');
+    await writeFile(logoPath, Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    const now = nowUtc();
+    const logoAsset: Asset = {
+      id: createId<'AssetId'>(),
+      type: 'TEAM_LOGO',
+      source: 'PROVIDER',
+      filePath: logoPath,
+      contentHash: 'hash_home_logo',
+      mimeType: 'image/png',
+      originalUrl: 'https://cdn.example.test/home-logo.png',
+      providerId: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    database.db.insert(assets).values(logoAsset).run();
+    database.db
+      .update(teamsTable)
+      .set({ logoAssetId: logoAsset.id, updatedAt: now })
+      .where(eq(teamsTable.id, seed.homeTeam.id))
+      .run();
+
+    const bulletin = bulletinService.createBulletin({
+      type: 'SINGLE',
+      mode: 'PRE_MATCH',
+      renderConfig: {
+        showTeamLogos: true,
+        teamLogoStyle: 'OFFICIAL',
+      },
+      selections: [
+        {
+          fixtureId: seed.fixture.id,
+          marketId: seed.market.id,
+          odd: '2.00',
+        },
+      ],
+    });
+
+    await service.renderBulletin(bulletin.bulletin.id);
+
+    expect(renderer.lastModel?.display.teamLogoStyle).toBe('OFFICIAL');
+    expect(renderer.lastModel?.selections[0]?.homeTeam.logo).toMatchObject({
+      assetId: logoAsset.id,
+      contentHash: 'hash_home_logo',
+      mimeType: 'image/png',
+    });
+    expect(
+      renderer.lastModel?.selections[0]?.homeTeam.logo?.resolvedPath,
+    ).toMatch(/^data:image\/png;base64,/);
+    expect(renderer.lastModel?.selections[0]?.awayTeam.logo).toBeNull();
   });
 
   it('refuses to read render files outside the configured export directory', async () => {
@@ -373,5 +451,5 @@ function seedCatalog(database: TestDatabase) {
     updatedAt: now,
   };
   markets.save(market);
-  return { fixture, market };
+  return { fixture, market, homeTeam, awayTeam };
 }

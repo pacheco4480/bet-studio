@@ -7,6 +7,101 @@ afterEach(() => {
 });
 
 describe('App', () => {
+  it('shows team logos, provider origin and initials fallback', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (url.startsWith('/api/teams')) {
+        return Promise.resolve(
+          response({
+            items: [
+              {
+                id: 'team_1',
+                name: 'Arsenal FC',
+                shortName: 'Arsenal',
+                countryCode: 'GB',
+                logoAssetId: 'asset_1',
+                logo: {
+                  assetId: 'asset_1',
+                  source: 'PROVIDER',
+                  providerCode: 'API_FOOTBALL',
+                  url: '/api/assets/asset_1',
+                },
+                active: true,
+                aliases: [],
+                competitions: [],
+              },
+              {
+                id: 'team_2',
+                name: 'Local Club',
+                shortName: null,
+                countryCode: null,
+                logoAssetId: null,
+                logo: null,
+                active: true,
+                aliases: [],
+                competitions: [],
+              },
+            ],
+          }),
+        );
+      }
+      if (url.startsWith('/api/competitions')) {
+        return Promise.resolve(
+          response({
+            items: [
+              {
+                id: 'competition_1',
+                name: 'UEFA Champions League',
+                shortName: 'UCL',
+                countryCode: null,
+                regionName: 'Europe',
+                logoAssetId: 'asset_competition_1',
+                logo: {
+                  assetId: 'asset_competition_1',
+                  source: 'PROVIDER',
+                  providerCode: 'API_FOOTBALL',
+                  url: '/api/assets/asset_competition_1',
+                },
+                active: true,
+              },
+            ],
+          }),
+        );
+      }
+      return Promise.resolve(response({ items: [] }));
+    });
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Teams' }));
+
+    expect(await screen.findByAltText('Arsenal FC logo')).toHaveAttribute(
+      'src',
+      '/api/assets/asset_1',
+    );
+    expect(screen.getByText('API-Football')).toBeInTheDocument();
+    expect(
+      screen.getByLabelText('Local Club initials fallback'),
+    ).toHaveTextContent('LC');
+    expect(screen.getByText('Initials')).toBeInTheDocument();
+    expect(
+      screen.getByLabelText('Replace Arsenal FC logo'),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('Add Local Club logo')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Remove logo' }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Competitions' }));
+    expect(
+      await screen.findByAltText('UEFA Champions League logo'),
+    ).toHaveAttribute('src', '/api/assets/asset_competition_1');
+  });
+
   it('renders the bulletin builder shell and loads local picker data', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const url =

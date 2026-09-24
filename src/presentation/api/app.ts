@@ -9,6 +9,7 @@ import {
 } from '../../application/catalog/catalog-service.js';
 import type { SettlementService } from '../../application/settlement/settlement-service.js';
 import type { SynchronizationService } from '../../application/synchronization/synchronization-service.js';
+import type { TeamLogoSyncService } from '../../application/synchronization/team-logo-sync-service.js';
 import {
   ConflictError,
   NotFoundError,
@@ -25,6 +26,7 @@ export function buildApiApp(options?: {
   renderingService?: RenderingService;
   settlementService?: SettlementService;
   synchronizationService?: SynchronizationService;
+  teamLogoSyncService?: TeamLogoSyncService;
 }) {
   const app = Fastify({
     logger: true,
@@ -46,22 +48,38 @@ export function buildApiApp(options?: {
 
     app.get('/api/bulletins', () => bulletins.listBulletins());
     app.post('/api/bulletins', (request, reply) =>
-      reply.code(201).send(bulletins.createBulletin(request.body)),
+      reply
+        .code(201)
+        .send(
+          decorateBulletinAggregate(
+            bulletins.createBulletin(request.body),
+            options.catalogService,
+          ),
+        ),
     );
     app.get('/api/bulletins/:id', (request) =>
-      bulletins.getBulletin((request.params as { id: string }).id),
+      decorateBulletinAggregate(
+        bulletins.getBulletin((request.params as { id: string }).id),
+        options.catalogService,
+      ),
     );
     app.patch('/api/bulletins/:id', (request) =>
-      bulletins.updateBulletin(
-        (request.params as { id: string }).id,
-        request.body,
+      decorateBulletinAggregate(
+        bulletins.updateBulletin(
+          (request.params as { id: string }).id,
+          request.body,
+        ),
+        options.catalogService,
       ),
     );
     app.post('/api/bulletins/:id/duplicate', (request, reply) =>
       reply
         .code(201)
         .send(
-          bulletins.duplicateBulletin((request.params as { id: string }).id),
+          decorateBulletinAggregate(
+            bulletins.duplicateBulletin((request.params as { id: string }).id),
+            options.catalogService,
+          ),
         ),
     );
     app.get('/api/builder/fixtures', (request) => {
@@ -70,14 +88,31 @@ export function buildApiApp(options?: {
         limit?: string;
         upcomingOnly?: string;
       };
-      return bulletins.listFixtures({
+      const result = bulletins.listFixtures({
         search: query.search,
         limit: query.limit ? Number(query.limit) : undefined,
         upcomingOnly: query.upcomingOnly !== 'false',
       });
+      return options.catalogService
+        ? {
+            ...result,
+            items: result.items.map((item) =>
+              decorateFixtureOption(item, options.catalogService!),
+            ),
+          }
+        : result;
     });
     app.post('/api/builder/fixtures', (request, reply) =>
-      reply.code(201).send(bulletins.createFixture(request.body)),
+      reply
+        .code(201)
+        .send(
+          options.catalogService
+            ? decorateFixtureOption(
+                bulletins.createFixture(request.body),
+                options.catalogService,
+              )
+            : bulletins.createFixture(request.body),
+        ),
     );
     app.get('/api/builder/markets', (request) => {
       const query = request.query as {
@@ -141,6 +176,16 @@ export function buildApiApp(options?: {
   if (options?.catalogService) {
     const catalog = options.catalogService;
 
+    app.get('/api/assets/:id', async (request, reply) => {
+      const asset = await catalog.readAsset(
+        (request.params as { id: string }).id,
+      );
+      return reply
+        .header('content-type', asset.mimeType)
+        .header('cache-control', 'private, max-age=86400')
+        .send(asset.bytes);
+    });
+
     app.get('/api/competitions', (request) =>
       catalog.listCompetitions(listQuerySchema.parse(request.query)),
     );
@@ -155,6 +200,18 @@ export function buildApiApp(options?: {
         (request.params as { id: string }).id,
         request.body,
       ),
+    );
+    app.post(
+      '/api/competitions/:id/logo',
+      { bodyLimit: 3 * 1024 * 1024 },
+      (request) =>
+        catalog.setCompetitionLogo(
+          (request.params as { id: string }).id,
+          request.body,
+        ),
+    );
+    app.delete('/api/competitions/:id/logo', (request) =>
+      catalog.removeCompetitionLogo((request.params as { id: string }).id),
     );
 
     app.get('/api/teams', (request) =>
@@ -172,6 +229,12 @@ export function buildApiApp(options?: {
     );
     app.patch('/api/teams/:id', (request) =>
       catalog.updateTeam((request.params as { id: string }).id, request.body),
+    );
+    app.post('/api/teams/:id/logo', { bodyLimit: 3 * 1024 * 1024 }, (request) =>
+      catalog.setTeamLogo((request.params as { id: string }).id, request.body),
+    );
+    app.delete('/api/teams/:id/logo', (request) =>
+      catalog.removeTeamLogo((request.params as { id: string }).id),
     );
     app.post('/api/teams/:id/aliases', (request, reply) =>
       reply
@@ -262,6 +325,14 @@ export function buildApiApp(options?: {
     );
   }
 
+  if (options?.teamLogoSyncService) {
+    const teamLogos = options.teamLogoSyncService;
+    app.get('/api/providers/api-football/status', () =>
+      teamLogos.getProviderStatus(),
+    );
+    app.post('/api/sync/team-logos', async () => teamLogos.syncAll());
+  }
+
   if (options?.settlementService) {
     const settlement = options.settlementService;
 
@@ -319,6 +390,64 @@ export function buildApiApp(options?: {
   });
 
   return app;
+}
+
+function decorateFixtureOption(
+  item: ReturnType<BulletinService['listFixtures']>['items'][number],
+  catalog: CatalogService,
+) {
+  return {
+    ...item,
+    homeTeam: safeDecoratedTeam(item.homeTeam.id, item.homeTeam, catalog),
+    awayTeam: safeDecoratedTeam(item.awayTeam.id, item.awayTeam, catalog),
+    competition: item.competition
+      ? safeDecoratedCompetition(item.competition.id, item.competition, catalog)
+      : null,
+  };
+}
+
+function decorateBulletinAggregate(
+  aggregate: ReturnType<BulletinService['getBulletin']>,
+  catalog: CatalogService | undefined,
+) {
+  if (!catalog) return aggregate;
+  return {
+    ...aggregate,
+    selections: aggregate.selections.map((selection) => ({
+      ...selection,
+      fixture: selection.fixture
+        ? decorateFixtureOption(selection.fixture, catalog)
+        : null,
+    })),
+  };
+}
+
+function safeDecoratedTeam(
+  id: string,
+  fallback: ReturnType<
+    BulletinService['listFixtures']
+  >['items'][number]['homeTeam'],
+  catalog: CatalogService,
+) {
+  try {
+    return catalog.getTeam(id);
+  } catch {
+    return { ...fallback, logo: null };
+  }
+}
+
+function safeDecoratedCompetition(
+  id: string,
+  fallback: NonNullable<
+    ReturnType<BulletinService['listFixtures']>['items'][number]['competition']
+  >,
+  catalog: CatalogService,
+) {
+  try {
+    return catalog.getCompetition(id);
+  } catch {
+    return { ...fallback, logo: null };
+  }
 }
 
 function sendError(

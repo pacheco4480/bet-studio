@@ -1,12 +1,14 @@
 import { and, eq, like, or } from 'drizzle-orm';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import type {
+  Asset,
   Competition,
   Market,
   Team,
   TeamAlias,
 } from '../../../domain/core/types.js';
 import type {
+  AssetId,
   CompetitionId,
   MarketId,
   TeamAliasId,
@@ -18,14 +20,17 @@ import type {
   ListQuery,
   TeamListQuery,
   TeamWithDetails,
+  AssetWithProvider,
 } from '../../../application/catalog/catalog-types.js';
 import type { BetStudioDatabase } from '../connection.js';
 import {
   competitionTeams,
   competitions,
+  assets,
   markets,
   teamAliases,
   teams,
+  providers,
 } from '../schema.js';
 
 function activePredicate(column: AnySQLiteColumn, active?: ActiveFilter) {
@@ -77,6 +82,21 @@ export class DrizzleCatalogRepository implements CatalogRepository {
       .values(competition)
       .onConflictDoUpdate({ target: competitions.id, set: competition })
       .run();
+  }
+
+  getAsset(id: AssetId): AssetWithProvider | null {
+    const row = this.db
+      .select({ asset: assets, providerCode: providers.code })
+      .from(assets)
+      .leftJoin(providers, eq(providers.id, assets.providerId))
+      .where(eq(assets.id, id))
+      .get();
+    return row
+      ? {
+          ...(row.asset as Asset),
+          providerCode: row.providerCode ?? null,
+        }
+      : null;
   }
 
   listTeams(query: TeamListQuery): TeamWithDetails[] {

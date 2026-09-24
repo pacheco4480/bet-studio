@@ -1,4 +1,6 @@
 import { ZodError, z } from 'zod';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { validateMarketConfiguration } from '../../domain/market/market-config.js';
 import { normalizeTeamAlias } from '../../domain/team/alias.js';
 import { createId, type AssetId } from '../../domain/shared/ids.js';
@@ -17,6 +19,7 @@ import {
 import type {
   CatalogRepository,
   ListQuery,
+  ManagedLogoStore,
   TeamListQuery,
 } from './catalog-types.js';
 
@@ -30,6 +33,9 @@ const optionalText = z
 const nameSchema = z.string().trim().min(1).max(120);
 const codeSchema = z.string().trim().min(1).max(80);
 const activeFilterSchema = z.enum(['all', 'active', 'inactive']).default('all');
+const logoInputSchema = z.object({
+  dataUrl: z.string().max(3_000_000),
+});
 
 const competitionInputSchema = z.object({
   name: nameSchema,
@@ -74,17 +80,21 @@ function toAssetId(value: string | null): AssetId | null {
 }
 
 export class CatalogService {
-  constructor(private readonly repository: CatalogRepository) {}
+  constructor(
+    private readonly repository: CatalogRepository,
+    private readonly assetRoot = 'assets',
+    private readonly logoStore: ManagedLogoStore | null = null,
+  ) {}
 
   listCompetitions(query: ListQuery) {
-    const items = this.repository.listCompetitions(query);
+    const items = this.repository
+      .listCompetitions(query)
+      .map((competition) => this.withLogo(competition));
     return { items, total: items.length };
   }
 
   getCompetition(id: string) {
-    const competition = this.repository.getCompetition(id as never);
-    if (!competition) throw new NotFoundError('Competition not found');
-    return competition;
+    return this.withLogo(this.requireCompetition(id));
   }
 
   createCompetition(input: unknown): Competition {
@@ -104,7 +114,7 @@ export class CatalogService {
   }
 
   updateCompetition(id: string, input: unknown): Competition {
-    const existing = this.getCompetition(id);
+    const existing = this.requireCompetition(id);
     const parsed = parseInput(
       competitionInputSchema
         .partial()
@@ -131,14 +141,119 @@ export class CatalogService {
   }
 
   listTeams(query: TeamListQuery) {
-    const items = this.repository.listTeams(query);
+    const items = this.repository
+      .listTeams(query)
+      .map((team) => this.withLogo(team));
     return { items, total: items.length };
   }
 
   getTeam(id: string) {
     const team = this.repository.getTeam(id as never);
     if (!team) throw new NotFoundError('Team not found');
+    return this.withLogo(team);
+  }
+
+  async readAsset(id: string): Promise<{ bytes: Buffer; mimeType: string }> {
+    const asset = this.repository.getAsset(id as AssetId);
+    if (!asset || !asset.mimeType?.startsWith('image/')) {
+      throw new NotFoundError('Image asset not found');
+    }
+    const root = path.resolve(this.assetRoot);
+    const filePath = path.resolve(asset.filePath);
+    if (filePath !== root && !filePath.startsWith(`${root}${path.sep}`)) {
+      throw new NotFoundError('Image asset not found');
+    }
+    try {
+      return { bytes: await readFile(filePath), mimeType: asset.mimeType };
+    } catch {
+      throw new NotFoundError('Image asset not found');
+    }
+  }
+
+  async setCompetitionLogo(id: string, input: unknown) {
+    const competition = this.requireCompetition(id);
+    const assetId = await this.saveManagedLogo('competition', id, input);
+    this.repository.saveCompetition({
+      ...competition,
+      logoAssetId: assetId,
+      updatedAt: nowUtc(),
+    });
+    return this.getCompetition(id);
+  }
+
+  removeCompetitionLogo(id: string) {
+    const competition = this.requireCompetition(id);
+    this.repository.saveCompetition({
+      ...competition,
+      logoAssetId: null,
+      updatedAt: nowUtc(),
+    });
+    return this.getCompetition(id);
+  }
+
+  async setTeamLogo(id: string, input: unknown) {
+    const team = this.requireTeam(id);
+    const assetId = await this.saveManagedLogo('team', id, input);
+    this.repository.saveTeam({
+      ...team,
+      logoAssetId: assetId,
+      updatedAt: nowUtc(),
+    });
+    return this.getTeam(id);
+  }
+
+  removeTeamLogo(id: string) {
+    const team = this.requireTeam(id);
+    this.repository.saveTeam({
+      ...team,
+      logoAssetId: null,
+      updatedAt: nowUtc(),
+    });
+    return this.getTeam(id);
+  }
+
+  private withLogo<T extends { logoAssetId: AssetId | null }>(entity: T) {
+    const asset = entity.logoAssetId
+      ? this.repository.getAsset(entity.logoAssetId)
+      : null;
+    return {
+      ...entity,
+      logo: asset
+        ? {
+            assetId: asset.id,
+            source: asset.source,
+            providerCode: asset.providerCode,
+            url: `/api/assets/${asset.id}`,
+          }
+        : null,
+    };
+  }
+
+  private requireCompetition(id: string): Competition {
+    const competition = this.repository.getCompetition(id as never);
+    if (!competition) throw new NotFoundError('Competition not found');
+    return competition;
+  }
+
+  private requireTeam(id: string): Team {
+    const team = this.repository.getTeam(id as never);
+    if (!team) throw new NotFoundError('Team not found');
     return team;
+  }
+
+  private async saveManagedLogo(
+    entityType: 'competition' | 'team',
+    entityId: string,
+    input: unknown,
+  ): Promise<AssetId> {
+    if (!this.logoStore)
+      throw new ValidationError('Logo uploads are unavailable');
+    const parsed = parseInput(logoInputSchema, input);
+    return this.logoStore.saveLogo({
+      entityType,
+      entityId,
+      dataUrl: parsed.dataUrl,
+    });
   }
 
   createTeam(input: unknown): Team {

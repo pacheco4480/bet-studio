@@ -27,6 +27,7 @@ import {
   ValidationError,
 } from '../../shared/errors.js';
 import type {
+  ProviderAssetCache,
   SyncRepository,
   SyncResource,
   SyncResult,
@@ -67,6 +68,7 @@ export class SynchronizationService {
   constructor(
     private readonly repository: SyncRepository,
     private readonly provider: FootballDataProvider | null,
+    private readonly assetCache: ProviderAssetCache | null = null,
   ) {}
 
   getProviderStatuses(): ProviderStatus[] {
@@ -242,11 +244,11 @@ export class SynchronizationService {
     return this.successCounters(external.length, created, updated, 0, failed);
   }
 
-  private syncExternalTeams(
+  private async syncExternalTeams(
     providerId: ProviderId,
     competitionId: CompetitionId,
     external: ExternalTeam[],
-  ): SyncCounters {
+  ): Promise<SyncCounters> {
     let created = 0;
     let updated = 0;
     let unresolved = 0;
@@ -270,20 +272,30 @@ export class SynchronizationService {
         const existing = reference
           ? this.repository.findTeam(reference.localEntityId as TeamId)
           : (aliasMatches[0] ?? null);
+        const teamId = existing?.id ?? createId<'TeamId'>();
+        const cachedLogoAssetId =
+          item.logoUrl && this.assetCache
+            ? await this.assetCache.cacheTeamLogo({
+                providerId,
+                url: item.logoUrl,
+                teamId,
+              })
+            : null;
         const team: Team = existing
           ? {
               ...existing,
               name: existing.name,
               shortName: existing.shortName ?? item.shortName,
               countryCode: existing.countryCode ?? item.countryCode,
+              logoAssetId: existing.logoAssetId ?? cachedLogoAssetId,
               updatedAt: now,
             }
           : {
-              id: createId<'TeamId'>(),
+              id: teamId,
               name: item.name,
               shortName: item.shortName,
               countryCode: item.countryCode,
-              logoAssetId: null,
+              logoAssetId: cachedLogoAssetId,
               active: true,
               archivedAt: null,
               createdAt: now,

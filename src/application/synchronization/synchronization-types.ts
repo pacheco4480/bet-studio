@@ -9,13 +9,15 @@ import type {
   Team,
 } from '../../domain/core/types.js';
 import type {
+  AssetId,
   CompetitionId,
   FixtureId,
   ProviderId,
   TeamId,
 } from '../../domain/shared/ids.js';
 
-export type SyncResource = 'COMPETITIONS' | 'TEAMS' | 'FIXTURES' | 'RESULTS';
+export type SyncResource =
+  'COMPETITIONS' | 'TEAMS' | 'FIXTURES' | 'RESULTS' | 'ASSETS';
 
 export type SyncResult = {
   providerCode: string;
@@ -54,6 +56,7 @@ export type SyncRepository = {
   findCompetition(id: CompetitionId): Competition | null;
   listActiveCompetitions(): Competition[];
   findTeam(id: TeamId): Team | null;
+  listTeamsForCompetition(competitionId: CompetitionId): Team[];
   findFixture(
     id: FixtureId,
   ): { fixture: Fixture; details: FixtureResultDetails | null } | null;
@@ -73,4 +76,17 @@ export type SyncRepository = {
     providerId: ProviderId,
     resourceType?: SyncResource,
   ): string | null;
+};
+
+export type ProviderAssetCache = {
+  cacheTeamLogo(input: {
+    providerId: ProviderId;
+    url: string;
+    teamId: TeamId;
+  }): Promise<AssetId | null>;
+  cacheCompetitionLogo(input: {
+    providerId: ProviderId;
+    url: string;
+    competitionId: CompetitionId;
+  }): Promise<AssetId | null>;
 };

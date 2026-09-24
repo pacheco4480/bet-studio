@@ -3,7 +3,10 @@ import type { FootballDataProvider } from '../providers/football-provider.js';
 import { CatalogService } from '../catalog/catalog-service.js';
 import { DrizzleCatalogRepository } from '../../infrastructure/database/repositories/catalog-repository.js';
 import { DrizzleSyncRepository } from '../../infrastructure/database/repositories/sync-repository.js';
+import { assets } from '../../infrastructure/database/schema.js';
 import { createMigratedTestDatabase } from '../../infrastructure/database/test-utils.js';
+import type { AssetId } from '../../domain/shared/ids.js';
+import { nowUtc } from '../../domain/shared/time.js';
 import { SynchronizationService } from './synchronization-service.js';
 
 function provider(
@@ -203,6 +206,73 @@ describe('SynchronizationService', () => {
       ).toBe(3);
     } finally {
       cleanup();
+    }
+  });
+
+  it('stores cached provider team logos when available', async () => {
+    const logoAssetId = 'asset_home_logo' as AssetId;
+    const database = createMigratedTestDatabase();
+    const syncRepository = new DrizzleSyncRepository(database.db);
+    const catalog = new CatalogService(
+      new DrizzleCatalogRepository(database.db),
+    );
+    const service = new SynchronizationService(
+      syncRepository,
+      provider({
+        listTeams: () =>
+          Promise.resolve([
+            {
+              providerCode: 'GOAL_API',
+              externalId: 'home',
+              competitionExternalId: '152',
+              name: 'Arsenal',
+              shortName: null,
+              countryCode: 'GB',
+              logoUrl: 'https://cdn.example.test/arsenal.png',
+            },
+          ]),
+      }),
+      {
+        cacheTeamLogo: ({ url }) =>
+          Promise.resolve(url.includes('arsenal') ? logoAssetId : null),
+        cacheCompetitionLogo: () => Promise.resolve(null),
+      },
+    );
+    try {
+      const now = nowUtc();
+      database.db
+        .insert(assets)
+        .values({
+          id: logoAssetId,
+          type: 'TEAM_LOGO',
+          source: 'PROVIDER',
+          filePath: 'assets/provider/team-logos/asset-home.png',
+          contentHash: 'hash_home_logo',
+          mimeType: 'image/png',
+          originalUrl: 'https://cdn.example.test/arsenal.png',
+          providerId: null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run();
+      const competition =
+        (await service.syncCompetitions(),
+        catalog.listCompetitions({ active: 'all' }).items[0]);
+
+      await service.syncTeams(competition.id);
+
+      const providerRecord = syncRepository.findProviderByCode('GOAL_API');
+      const teamReference = syncRepository.findProviderReference(
+        providerRecord!.id,
+        'TEAM',
+        'home',
+      );
+      expect(
+        syncRepository.findTeam(teamReference!.localEntityId as never)
+          ?.logoAssetId,
+      ).toBe(logoAssetId);
+    } finally {
+      database.cleanup();
     }
   });
 

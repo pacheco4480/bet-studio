@@ -9,6 +9,7 @@ import type {
   Bulletin,
   BulletinSelection,
   BulletinSelectionSnapshot,
+  Asset,
   Competition,
   Fixture,
   Market,
@@ -20,6 +21,7 @@ import { assertSelectionCount } from '../../../domain/core/invariants.js';
 import { createId } from '../../../domain/shared/ids.js';
 import type {
   BulletinId,
+  AssetId,
   FixtureId,
   MarketId,
   TemplateId,
@@ -27,6 +29,7 @@ import type {
 import { nowUtc } from '../../../domain/shared/time.js';
 import type { BetStudioDatabase } from '../connection.js';
 import {
+  assets,
   bulletinCodeSequence,
   bulletinSelectionSnapshots,
   bulletinSelections,
@@ -42,6 +45,13 @@ import {
 
 export class DrizzleBulletinBuilderRepository implements BulletinRepository {
   constructor(private readonly db: BetStudioDatabase) {}
+
+  findAsset(id: AssetId): Asset | null {
+    return (
+      (this.db.select().from(assets).where(eq(assets.id, id)).get() as
+        Asset | undefined) ?? null
+    );
+  }
 
   allocatePublicCode(): string {
     return this.db.transaction((tx) => {

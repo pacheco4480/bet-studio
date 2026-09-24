@@ -7,6 +7,7 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { CatalogService } from '../../application/catalog/catalog-service.js';
 import { SettlementService } from '../../application/settlement/settlement-service.js';
 import { SynchronizationService } from '../../application/synchronization/synchronization-service.js';
+import { TeamLogoSyncService } from '../../application/synchronization/team-logo-sync-service.js';
 import { openDatabase } from '../../infrastructure/database/connection.js';
 import { DrizzleBulletinRepository } from '../../infrastructure/database/repositories/bulletin-repository.js';
 import { DrizzleBulletinBuilderRepository } from '../../infrastructure/database/repositories/bulletin-builder-repository.js';
@@ -17,8 +18,11 @@ import { DrizzleHistoryRepository } from '../../infrastructure/database/reposito
 import { DrizzleMarketRepository } from '../../infrastructure/database/repositories/market-repository.js';
 import { DrizzleRenderRecordRepository } from '../../infrastructure/database/repositories/render-record-repository.js';
 import { DrizzleSyncRepository } from '../../infrastructure/database/repositories/sync-repository.js';
+import { LocalProviderAssetCache } from '../../infrastructure/assets/provider-asset-cache.js';
+import { LocalManagedLogoStore } from '../../infrastructure/assets/managed-logo-store.js';
 import { HtmlFeedRenderer } from '../../infrastructure/rendering/html-feed-renderer.js';
 import { GoalApiProvider } from '../../infrastructure/providers/goal-api/goal-api-provider.js';
+import { ApiFootballArtworkProvider } from '../../infrastructure/providers/api-football/api-football-artwork-provider.js';
 import { FetchJsonHttpClient } from '../../infrastructure/providers/http-client.js';
 import { RenderingService } from '../../application/rendering/rendering-service.js';
 
@@ -34,7 +38,18 @@ const goalApiProvider = env.GOAL_API_KEY
       }),
     )
   : null;
+const apiFootballArtworkProvider = env.API_FOOTBALL_API_KEY
+  ? new ApiFootballArtworkProvider({
+      apiKey: env.API_FOOTBALL_API_KEY,
+      baseUrl: env.API_FOOTBALL_BASE_URL,
+      timeoutMs: env.API_FOOTBALL_TIMEOUT_MS,
+      season: env.API_FOOTBALL_SEASON,
+      minRequestIntervalMs: env.API_FOOTBALL_REQUEST_INTERVAL_MS,
+    })
+  : null;
 const bulletinRepository = new DrizzleBulletinBuilderRepository(database.db);
+const syncRepository = new DrizzleSyncRepository(database.db);
+const providerAssetCache = new LocalProviderAssetCache(database.db);
 const app = buildApiApp({
   analyticsService: new AnalyticsService(
     new DrizzleAnalyticsRepository(database.db),
@@ -47,15 +62,25 @@ const app = buildApiApp({
     new HtmlFeedRenderer(),
     'exports/renders',
   ),
-  catalogService: new CatalogService(new DrizzleCatalogRepository(database.db)),
+  catalogService: new CatalogService(
+    new DrizzleCatalogRepository(database.db),
+    'assets',
+    new LocalManagedLogoStore(database.db),
+  ),
   settlementService: new SettlementService(
     new DrizzleBulletinRepository(database.db),
     new DrizzleFixtureRepository(database.db),
     new DrizzleMarketRepository(database.db),
   ),
   synchronizationService: new SynchronizationService(
-    new DrizzleSyncRepository(database.db),
+    syncRepository,
     goalApiProvider,
+    providerAssetCache,
+  ),
+  teamLogoSyncService: new TeamLogoSyncService(
+    syncRepository,
+    apiFootballArtworkProvider,
+    providerAssetCache,
   ),
 });
 

@@ -31,6 +31,8 @@ export type RenderSelectionModel = {
   homeTeam: RenderTeamModel;
   awayTeam: RenderTeamModel;
   competitionName: string | null;
+  competitionCountryCode: string | null;
+  competitionLogo: RenderAssetRef | null;
   marketCode: string;
   marketName: string;
   odd: string;

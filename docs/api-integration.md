@@ -243,7 +243,18 @@ Implemented GOAL API adapter capabilities:
 - finalScores: supported through fixture/result data
 - fixtureStatistics: endpoint exists, but only fixture-level details needed by this phase are normalized
 - corners: not enabled, because the public documentation does not specify a stable normalized corner field in the consumed fixture payload
-- teamLogos and competitionLogos: not enabled, because safe local asset ingestion is not implemented yet
+- teamLogos: not advertised by the consumed GOAL API responses
+- competitionLogos: not enabled yet
+
+Team and competition artwork are enriched separately through API-Football. The
+optional `API_FOOTBALL_API_KEY` enables explicit, user-triggered artwork
+synchronization. The free plan's 2024 competition rosters are used as a
+low-request baseline for team logos; missing current teams are searched
+individually with a configured request interval, then validated and cached
+locally. Competition artwork currently uses API-Football country flags from the
+`/countries` endpoint as `COMPETITION_LOGO` assets when a competition has no
+manual logo. API-Football never creates or renames Bet Studio teams or
+competitions.
 
 GOAL API status normalization is adapter-local. Documented/common values such as `NS`, `TBD`, `1H`, `2H`, `HT`, `FT`, `AET`, `PEN`, `PST`, `CANC` and `ABD` map to the Bet Studio fixture status model. Unknown provider status values map to `UNKNOWN`.
 
@@ -323,6 +334,7 @@ Example:
 GOAL_API_KEY=
 FOOTBALL_DATA_API_KEY=
 THESPORTSDB_API_KEY=
+API_FOOTBALL_API_KEY=
 
 Commit:
 

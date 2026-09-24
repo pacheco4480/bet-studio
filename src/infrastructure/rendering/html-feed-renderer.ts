@@ -105,18 +105,18 @@ function renderHtml(
       );
       return `<section class="selection-card ${mode.id.toLowerCase()}">
         <div class="meta-row">
-          <span>${escapeHtml(selection.competitionName ?? '')}</span>
+          <span class="competition-meta">${renderCompetitionLogo(model, selection)}${escapeHtml(selection.competitionName ?? '')}</span>
           <span>${renderDateTime(model, selection)}</span>
         </div>
         <div class="teams-row">
           <div class="team ${model.display.showTeamLogos === false ? 'no-logo' : ''}">
-            ${model.display.showTeamLogos === false ? '' : `<div class="logo">${initials(selection.homeTeam.name)}</div>`}
+            ${renderTeamLogo(model, selection.homeTeam)}
             <strong style="font-size:${homeFont}px;max-width:${teamMaxWidth}px">${escapeHtml(selection.homeTeam.name)}</strong>
           </div>
           <span class="versus">${model.mode === 'LIVE' ? renderScore(selection) : 'VS'}</span>
           <div class="team away ${model.display.showTeamLogos === false ? 'no-logo' : ''}">
             <strong style="font-size:${awayFont}px;max-width:${teamMaxWidth}px">${escapeHtml(selection.awayTeam.name)}</strong>
-            ${model.display.showTeamLogos === false ? '' : `<div class="logo">${initials(selection.awayTeam.name)}</div>`}
+            ${renderTeamLogo(model, selection.awayTeam)}
           </div>
         </div>
         <div class="market-row">
@@ -131,6 +131,7 @@ function renderHtml(
     })
     .join('');
 
+  const hasStake = parseDisplayDecimal(model.stake) !== null;
   const potentialReturn = calculatePotentialReturn(model.stake, model.totalOdd);
 
   return `<!doctype html>
@@ -153,7 +154,7 @@ function renderHtml(
         </header>
         <section class="selections">${cards}</section>
         <section class="summary">
-          <div>${model.display.showStake ? `<span>STAKE</span><strong>${escapeHtml(model.stake ?? '-')}</strong>` : ''}</div>
+          <div>${model.display.showStake && hasStake ? `<span>STAKE</span><strong>${escapeHtml(model.stake!)}</strong>` : ''}</div>
           <div>${potentialReturn ? `<span>POTENTIAL RETURN</span><strong>${escapeHtml(potentialReturn)}</strong>` : ''}</div>
           <div>${model.display.showTotalOdd ? `<span>ODD TOTAL</span><strong>${escapeHtml(model.totalOdd ?? '-')}</strong>` : ''}</div>
         </section>
@@ -170,7 +171,7 @@ function renderCss(
   cardGap: number,
 ): string {
   const c = themedColors(template, model.display.templateTheme);
-  return `*{box-sizing:border-box}html,body{margin:0;width:${FEED_WIDTH}px;height:${FEED_HEIGHT}px;overflow:hidden;background:${c.background};font-family:${template.typography.fontFamily};color:${c.textPrimary}}.canvas{position:relative;width:${FEED_WIDTH}px;height:${FEED_HEIGHT}px;overflow:hidden;background:${c.canvasBackground};padding:56px 64px}.header{height:170px;display:flex;align-items:flex-start;justify-content:space-between;border-bottom:1px solid ${c.border}}.eyebrow{margin:0 0 16px;color:${c.accent};font-size:28px;font-weight:800;letter-spacing:0}.header h1{margin:0;font-size:64px;line-height:1}.header-side{text-align:right;display:grid;gap:14px;font-size:28px}.overall,.status{display:inline-flex;align-items:center;justify-content:center;width:134px;height:38px;border:1px solid ${c.border};border-radius:8px;font-weight:800;font-size:18px}.overall{width:170px;height:48px}.selections{position:absolute;left:${template.regions.selections.x}px;top:${template.regions.selections.y}px;width:${template.regions.selections.width}px;height:${template.regions.selections.height}px;display:grid;grid-auto-rows:${cardHeight}px;gap:${cardGap}px}.selection-card{position:relative;height:${cardHeight}px;background:${c.cardBackground};border:1px solid ${c.border};border-radius:8px;padding:18px 26px;display:grid;grid-template-rows:22px minmax(0,1fr) 30px;gap:7px;overflow:hidden}.hero{padding:40px 44px;grid-template-rows:32px minmax(0,1fr) 70px 46px}.compact{padding:9px 18px;grid-template-rows:16px minmax(0,1fr) 20px;gap:3px}.ultra_compact{padding:7px 18px;grid-template-rows:14px minmax(0,1fr) 18px;gap:2px}.meta-row,.result-row,.market-row,.teams-row{display:flex;align-items:center;justify-content:space-between;gap:18px;min-width:0}.meta-row{min-height:0;color:${c.textMuted};font-size:14px;text-transform:uppercase}.compact .meta-row,.ultra_compact .meta-row{font-size:12px}.team{min-width:0;display:flex;align-items:center;gap:14px;flex:1 1 0;overflow:hidden}.team.no-logo{gap:0}.away{justify-content:flex-end;text-align:right}.team strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:clip;line-height:1.05}.logo{width:54px;height:54px;flex:0 0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;background:${c.background};border:1px solid ${c.border};color:${c.accent};font-weight:900;font-size:18px}.hero .teams-row{display:grid;grid-template-columns:minmax(0,1fr) 76px minmax(0,1fr);align-items:center;gap:20px}.hero .team{gap:16px;justify-content:flex-end;text-align:right}.hero .team.no-logo{gap:0}.hero .away{justify-content:flex-start;text-align:left}.hero .logo{width:118px;height:118px;font-size:34px}.compact .teams-row,.ultra_compact .teams-row{padding-right:112px}.compact .team:first-child,.ultra_compact .team:first-child{justify-content:flex-end;text-align:right}.compact .away,.ultra_compact .away{justify-content:flex-start;text-align:left}.compact .logo{width:32px;height:32px;font-size:13px}.ultra_compact .logo{width:28px;height:28px;font-size:11px}.versus{flex:0 0 92px;text-align:center;color:${c.textSecondary};font-size:28px;font-weight:900}.hero .versus{font-size:26px;min-width:0}.compact .versus,.ultra_compact .versus{flex-basis:58px;font-size:18px}.market-row{color:${c.textSecondary};min-height:0;overflow:hidden}.market-row span{display:block;white-space:nowrap;overflow:hidden;text-overflow:clip}.market-row strong{display:grid;gap:2px;font-size:inherit;color:${c.accent};font-weight:900;white-space:nowrap;text-align:right}.market-row strong span{color:${c.textMuted};font-size:12px;font-weight:800;letter-spacing:0}.hero .market-row strong span{font-size:16px}.compact .market-row,.ultra_compact .market-row{padding-right:116px}.compact .market-row strong,.ultra_compact .market-row strong{position:absolute;right:18px;bottom:34px;width:84px}.compact .market-row strong span,.ultra_compact .market-row strong span{display:none}.result-row{min-height:0;color:${c.textMuted};font-size:16px}.compact .result-row,.ultra_compact .result-row{position:absolute;right:18px;bottom:6px;width:84px}.compact .result-row>span:first-child,.ultra_compact .result-row>span:first-child{display:none}.compact .status,.ultra_compact .status{width:84px;height:22px;font-size:11px}.pending{color:${c.status.PENDING}}.green{color:${c.status.GREEN}}.red{color:${c.status.RED}}.void{color:${c.status.VOID}}.manual{color:${c.status.MANUAL}}.summary{position:absolute;left:${template.regions.summary.x}px;top:${template.regions.summary.y}px;width:${template.regions.summary.width}px;height:${template.regions.summary.height}px;border-top:1px solid ${c.border};display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center}.summary div{display:grid;gap:6px}.summary div:nth-child(2){text-align:center}.summary div:nth-child(3){text-align:right}.summary span{font-size:18px;color:${c.textMuted}}.summary strong{font-size:42px;color:${c.textPrimary}}.footer{position:absolute;left:${template.regions.footer.x}px;top:${template.regions.footer.y}px;width:${template.regions.footer.width}px;color:${c.textMuted};font-size:18px;text-align:center}`;
+  return `*{box-sizing:border-box}html,body{margin:0;width:${FEED_WIDTH}px;height:${FEED_HEIGHT}px;overflow:hidden;background:${c.background};font-family:${template.typography.fontFamily};color:${c.textPrimary}}.canvas{position:relative;width:${FEED_WIDTH}px;height:${FEED_HEIGHT}px;overflow:hidden;background:${c.canvasBackground};padding:56px 64px}.header{height:170px;display:flex;align-items:flex-start;justify-content:space-between;border-bottom:1px solid ${c.border}}.eyebrow{margin:0 0 16px;color:${c.accent};font-size:28px;font-weight:800;letter-spacing:0}.header h1{margin:0;font-size:64px;line-height:1}.header-side{text-align:right;display:grid;gap:14px;font-size:28px}.overall,.status{display:inline-flex;align-items:center;justify-content:center;width:134px;height:38px;border:1px solid ${c.border};border-radius:8px;font-weight:800;font-size:18px}.overall{width:170px;height:48px}.selections{position:absolute;left:${template.regions.selections.x}px;top:${template.regions.selections.y}px;width:${template.regions.selections.width}px;height:${template.regions.selections.height}px;display:grid;grid-auto-rows:${cardHeight}px;gap:${cardGap}px}.selection-card{position:relative;height:${cardHeight}px;background:${c.cardBackground};border:1px solid ${c.border};border-radius:8px;padding:18px 26px;display:grid;grid-template-rows:22px minmax(0,1fr) 30px;gap:7px;overflow:hidden}.hero{padding:40px 44px;grid-template-rows:32px minmax(0,1fr) 70px 46px}.compact{padding:9px 18px;grid-template-rows:16px minmax(0,1fr) 20px;gap:3px}.ultra_compact{padding:7px 18px;grid-template-rows:14px minmax(0,1fr) 18px;gap:2px}.meta-row,.result-row,.market-row,.teams-row{display:flex;align-items:center;justify-content:space-between;gap:18px;min-width:0}.meta-row{min-height:0;color:${c.textMuted};font-size:14px;text-transform:uppercase}.compact .meta-row,.ultra_compact .meta-row{font-size:12px}.competition-meta{display:inline-flex;align-items:center;gap:7px;min-width:0}.competition-logo{width:20px;height:20px;flex:0 0 auto;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:${c.background};border:1px solid ${c.border};color:${c.accent};font-size:9px;font-weight:900;overflow:hidden}.competition-logo.official-logo{width:28px;height:20px;border-radius:4px;padding:0}.competition-logo img{width:100%;height:100%;object-fit:contain}.team{min-width:0;display:flex;align-items:center;gap:12px;flex:1 1 0;overflow:hidden}.team.no-logo{gap:0}.away{justify-content:flex-start;text-align:left}.team strong{display:block;white-space:nowrap;overflow:hidden;text-overflow:clip;line-height:1.05}.logo{width:32px;height:32px;flex:0 0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;background:${c.background};border:1px solid ${c.border};color:${c.accent};font-weight:900;font-size:12px;overflow:hidden}.official-logo{padding:3px}.logo img{width:100%;height:100%;object-fit:contain;display:block}.hero .teams-row{display:grid;grid-template-columns:minmax(0,1fr) 76px minmax(0,1fr);align-items:center;gap:20px}.hero .team{gap:14px;justify-content:flex-end;text-align:right}.hero .team.no-logo{gap:0}.hero .away{justify-content:flex-start;text-align:left}.hero .logo{width:68px;height:68px;font-size:22px}.hero .official-logo{padding:6px}.compact .teams-row,.ultra_compact .teams-row{padding-right:112px}.compact .team:first-child,.ultra_compact .team:first-child{justify-content:flex-end;text-align:right}.compact .away,.ultra_compact .away{justify-content:flex-start;text-align:left}.compact .logo{width:18px;height:18px;font-size:8px}.compact .official-logo{padding:2px}.ultra_compact .logo{width:16px;height:16px;font-size:8px}.ultra_compact .official-logo{padding:2px}.versus{flex:0 0 92px;text-align:center;color:${c.textSecondary};font-size:28px;font-weight:900}.hero .versus{font-size:26px;min-width:0}.compact .versus,.ultra_compact .versus{flex-basis:58px;font-size:18px}.market-row{color:${c.textSecondary};min-height:0;overflow:hidden}.market-row span{display:block;white-space:nowrap;overflow:hidden;text-overflow:clip}.market-row strong{display:grid;gap:2px;font-size:inherit;color:${c.accent};font-weight:900;white-space:nowrap;text-align:right}.market-row strong span{color:${c.textMuted};font-size:12px;font-weight:800;letter-spacing:0}.hero .market-row strong span{font-size:16px}.compact .market-row,.ultra_compact .market-row{padding-right:116px}.compact .market-row strong,.ultra_compact .market-row strong{position:absolute;right:18px;bottom:34px;width:84px}.compact .market-row strong span,.ultra_compact .market-row strong span{display:none}.result-row{min-height:0;color:${c.textMuted};font-size:16px}.compact .result-row,.ultra_compact .result-row{position:absolute;right:18px;bottom:6px;width:84px}.compact .result-row>span:first-child,.ultra_compact .result-row>span:first-child{display:none}.compact .status,.ultra_compact .status{width:84px;height:22px;font-size:11px}.pending{color:${c.status.PENDING}}.green{color:${c.status.GREEN}}.red{color:${c.status.RED}}.void{color:${c.status.VOID}}.manual{color:${c.status.MANUAL}}.summary{position:absolute;left:${template.regions.summary.x}px;top:${template.regions.summary.y}px;width:${template.regions.summary.width}px;height:${template.regions.summary.height}px;border-top:1px solid ${c.border};display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center}.summary div{display:grid;gap:6px}.summary div:nth-child(2){text-align:center}.summary div:nth-child(3){text-align:right}.summary span{font-size:18px;color:${c.textMuted}}.summary strong{font-size:42px;color:${c.textPrimary}}.footer{position:absolute;left:${template.regions.footer.x}px;top:${template.regions.footer.y}px;width:${template.regions.footer.width}px;color:${c.textMuted};font-size:18px;text-align:center}`;
 }
 
 function themedColors(template: RenderTemplateVersion, themeName: unknown) {
@@ -333,6 +334,31 @@ function fitFont(
     minSize,
     Math.floor((maxWidth / Math.max(text.length, 1)) * 1.65),
   );
+}
+
+function renderTeamLogo(
+  model: BulletinRenderModel,
+  team: BulletinRenderModel['selections'][number]['homeTeam'],
+): string {
+  if (model.display.showTeamLogos === false) return '';
+  if (model.display.teamLogoStyle === 'OFFICIAL' && team.logo) {
+    return `<div class="logo official-logo"><img src="${escapeHtml(team.logo.resolvedPath)}" alt="" /></div>`;
+  }
+  return `<div class="logo">${initials(team.name)}</div>`;
+}
+
+function renderCompetitionLogo(
+  model: BulletinRenderModel,
+  selection: BulletinRenderModel['selections'][number],
+): string {
+  if (model.display.showCompetition === false) return '';
+  if (model.display.teamLogoStyle === 'OFFICIAL' && selection.competitionLogo) {
+    return `<span class="competition-logo official-logo"><img src="${escapeHtml(selection.competitionLogo.resolvedPath)}" alt="" /></span>`;
+  }
+  const fallback =
+    selection.competitionCountryCode ?? selection.competitionName;
+  if (!fallback) return '';
+  return `<span class="competition-logo">${initials(fallback)}</span>`;
 }
 
 function initials(text: string): string {

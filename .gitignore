@@ -18,5 +18,7 @@ data/
 *.db-wal
 
 exports/
+assets/provider/
+assets/local/
 tmp/
 *.log
