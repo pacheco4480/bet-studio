@@ -277,6 +277,32 @@ describe('BulletinService', () => {
         .items.some((item) => item.fixture.status === 'FINISHED'),
     ).toBe(true);
   });
+
+  it('archives fixtures without deleting them from explicit management lists', () => {
+    const { service, seed } = harness();
+
+    const archived = service.setFixtureArchived(seed.fixtures[0].id, true);
+
+    expect(archived.fixture.archivedAt).not.toBeNull();
+    expect(
+      service
+        .listFixtures({ limit: 20, upcomingOnly: false })
+        .items.some((item) => item.fixture.id === seed.fixtures[0].id),
+    ).toBe(false);
+    expect(
+      service
+        .listFixtures({
+          limit: 20,
+          upcomingOnly: false,
+          includeArchived: true,
+        })
+        .items.some((item) => item.fixture.id === seed.fixtures[0].id),
+    ).toBe(true);
+
+    expect(
+      service.setFixtureArchived(seed.fixtures[0].id, false).fixture,
+    ).toMatchObject({ archivedAt: null });
+  });
 });
 
 function seedCatalog(database: TestDatabase) {
@@ -341,6 +367,7 @@ function seedCatalog(database: TestDatabase) {
       awayScore: null,
       liveMinute: null,
       sourceType: 'MANUAL',
+      archivedAt: null,
       createdAt: now,
       updatedAt: now,
     };

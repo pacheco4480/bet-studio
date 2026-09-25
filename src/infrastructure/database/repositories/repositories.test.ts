@@ -114,6 +114,7 @@ describe('Drizzle repositories', () => {
       awayScore: 1,
       liveMinute: null,
       sourceType: 'MANUAL',
+      archivedAt: null,
       createdAt: now,
       updatedAt: now,
     };

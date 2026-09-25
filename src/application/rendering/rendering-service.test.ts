@@ -434,6 +434,7 @@ function seedCatalog(database: TestDatabase) {
     awayScore: null,
     liveMinute: null,
     sourceType: 'MANUAL',
+    archivedAt: null,
     createdAt: now,
     updatedAt: now,
   };

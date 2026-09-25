@@ -87,11 +87,13 @@ export function buildApiApp(options?: {
         search?: string;
         limit?: string;
         upcomingOnly?: string;
+        includeArchived?: string;
       };
       const result = bulletins.listFixtures({
         search: query.search,
         limit: query.limit ? Number(query.limit) : undefined,
         upcomingOnly: query.upcomingOnly !== 'false',
+        includeArchived: query.includeArchived === 'true',
       });
       return options.catalogService
         ? {
@@ -114,6 +116,16 @@ export function buildApiApp(options?: {
             : bulletins.createFixture(request.body),
         ),
     );
+    app.patch('/api/fixtures/:id/archive', (request) => {
+      const body = (request.body ?? {}) as { archived?: boolean };
+      const result = bulletins.setFixtureArchived(
+        (request.params as { id: string }).id,
+        body.archived === true,
+      );
+      return options.catalogService
+        ? decorateFixtureOption(result, options.catalogService)
+        : result;
+    });
     app.get('/api/builder/markets', (request) => {
       const query = request.query as {
         search?: string;

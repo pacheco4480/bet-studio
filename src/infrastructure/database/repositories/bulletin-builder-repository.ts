@@ -288,6 +288,7 @@ export class DrizzleBulletinBuilderRepository implements BulletinRepository {
     search?: string;
     limit: number;
     upcomingOnly?: boolean;
+    includeArchived?: boolean;
   }): FixtureOption[] {
     const pattern = input.search?.trim() ? `%${input.search.trim()}%` : null;
     const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
@@ -320,6 +321,7 @@ export class DrizzleBulletinBuilderRepository implements BulletinRepository {
                 ),
               )
             : undefined,
+          input.includeArchived ? undefined : isNull(fixtures.archivedAt),
         ),
       )
       .orderBy(desc(fixtures.kickoffAt))

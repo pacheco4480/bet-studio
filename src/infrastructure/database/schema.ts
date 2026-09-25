@@ -193,6 +193,7 @@ export const fixtures = sqliteTable(
     awayScore: integer('away_score'),
     liveMinute: integer('live_minute'),
     sourceType: text('source_type').notNull(),
+    archivedAt: text('archived_at'),
     ...timestamps,
   },
   (table) => ({

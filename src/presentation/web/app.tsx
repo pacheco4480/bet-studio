@@ -57,6 +57,7 @@ type FixtureOption = {
     awayScore: number | null;
     liveMinute: number | null;
     sourceType?: string;
+    archivedAt: string | null;
   };
   homeTeam: Team;
   awayTeam: Team;
@@ -3809,9 +3810,158 @@ function MarketForm(props: { current: Market | null; onSaved: () => void }) {
 
 function FixturesPanel() {
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [dateScope, setDateScope] = useState('date');
+  const [fixtures, setFixtures] = useState<FixtureOption[]>([]);
+  const [competitions, setCompetitions] = useState<Competition[]>([]);
+  const [search, setSearch] = useState('');
+  const [competitionId, setCompetitionId] = useState('');
+  const [status, setStatus] = useState('all');
+  const [archiveFilter, setArchiveFilter] = useState('visible');
+  const [limit, setLimit] = useState(300);
+  const [loading, setLoading] = useState(false);
+  const [action, setAction] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async (): Promise<FixtureOption[]> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [fixtureResult, competitionResult] = await Promise.all([
+        request<{ items: FixtureOption[] }>(
+          `/api/builder/fixtures?limit=${limit}&upcomingOnly=false&includeArchived=true`,
+        ),
+        request<{ items: Competition[] }>('/api/competitions?active=all'),
+      ]);
+      setFixtures(fixtureResult.items);
+      setCompetitions(competitionResult.items);
+      return fixtureResult.items;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load fixtures');
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  }, [limit]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function runAction(
+    label: string,
+    callback: () => Promise<
+      void | ((reloadedFixtures: FixtureOption[]) => void)
+    >,
+  ) {
+    setAction(label);
+    setError(null);
+    setMessage(null);
+    try {
+      const afterReload = await callback();
+      const reloadedFixtures = await load();
+      if (afterReload) afterReload(reloadedFixtures);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Action failed');
+    } finally {
+      setAction(null);
+    }
+  }
+
+  const fixturesMatchingNonDateFilters = useMemo(
+    () =>
+      fixtures.filter((item) => {
+        if (archiveFilter === 'visible' && item.fixture.archivedAt)
+          return false;
+        if (archiveFilter === 'archived' && !item.fixture.archivedAt)
+          return false;
+        if (competitionId && item.competition?.id !== competitionId)
+          return false;
+        if (!fixtureMatchesStatusFilter(item, status)) return false;
+        const query = search.trim().toLowerCase();
+        if (!query) return true;
+        return [
+          item.homeTeam.name,
+          item.awayTeam.name,
+          item.competition?.name ?? '',
+          item.fixture.status,
+          item.fixture.sourceType ?? '',
+        ]
+          .join(' ')
+          .toLowerCase()
+          .includes(query);
+      }),
+    [archiveFilter, competitionId, fixtures, search, status],
+  );
+
+  const fixtureDayOptions = useMemo(
+    () => summarizeFixtureDays(fixturesMatchingNonDateFilters),
+    [fixturesMatchingNonDateFilters],
+  );
+
+  const filteredFixtures = useMemo(
+    () =>
+      fixturesMatchingNonDateFilters.filter((item) =>
+        fixtureMatchesDateScope(item, dateScope, date),
+      ),
+    [date, dateScope, fixturesMatchingNonDateFilters],
+  );
+
+  const groupedFixtures = useMemo(
+    () => groupFixtureManagementItems(filteredFixtures),
+    [filteredFixtures],
+  );
+
+  async function refreshVisibleResults() {
+    const syncedFixtures = filteredFixtures.filter(
+      (item) => item.fixture.sourceType === 'SYNCED',
+    );
+    if (syncedFixtures.length === 0) {
+      setMessage('No synced fixtures are visible under the current filters.');
+      return;
+    }
+
+    setAction('Refresh visible results');
+    setError(null);
+    setMessage(`Refreshing 0/${syncedFixtures.length} visible fixtures...`);
+    let updated = 0;
+    let unresolved = 0;
+    let failed = 0;
+
+    try {
+      for (const [index, item] of syncedFixtures.entries()) {
+        setMessage(
+          `Refreshing ${index + 1}/${syncedFixtures.length}: ${item.homeTeam.name} vs ${item.awayTeam.name}...`,
+        );
+        try {
+          const result = await request<SyncResult>(
+            `/api/sync/fixtures/${item.fixture.id}/result`,
+            { method: 'POST' },
+          );
+          updated += result.updated;
+          unresolved += result.unresolved;
+          failed += result.failed;
+        } catch {
+          failed += 1;
+        }
+      }
+      await load();
+      setMessage(
+        `Visible refresh complete: ${updated} updated, ${unresolved} unresolved, ${failed} failed across ${syncedFixtures.length} synced fixtures.`,
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to refresh visible results',
+      );
+    } finally {
+      setAction(null);
+    }
+  }
 
   return (
-    <CatalogSection title="Fixtures" error={null}>
+    <CatalogSection title="Fixtures" error={error}>
       <SyncPanel
         actionLabel="Refresh GOAL API fixtures"
         onSync={() =>
@@ -3821,10 +3971,462 @@ function FixturesPanel() {
           })
         }
       >
-        <TextInput label="Date" value={date} onChange={setDate} required />
+        <TextInput
+          label="Date"
+          type="date"
+          value={date}
+          onChange={setDate}
+          required
+        />
       </SyncPanel>
+
+      <section className="grid gap-4 rounded border border-white/10 bg-studio-panel p-4">
+        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h3 className="font-semibold">Saved fixtures</h3>
+            <p className="mt-1 text-sm text-slate-400">
+              Manage the fixtures already stored locally. Synced fixtures can
+              refresh provider results; manual fixtures can be corrected from
+              History after they are used in a bulletin.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded border border-white/10 px-3 py-2 text-sm font-semibold"
+              disabled={loading || action !== null}
+              onClick={() => void load()}
+            >
+              Refresh list
+            </button>
+            <button
+              type="button"
+              className="rounded border border-white/10 px-3 py-2 text-sm font-semibold"
+              disabled={loading || action !== null}
+              onClick={() => void refreshVisibleResults()}
+            >
+              Refresh visible results
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto]">
+          <label className="text-sm text-slate-300">
+            Date
+            <input
+              className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-white"
+              type="date"
+              value={date}
+              onChange={(event) => {
+                setDate(event.target.value);
+                setDateScope(event.target.value ? 'date' : 'all');
+              }}
+            />
+          </label>
+          <TextInput label="Search" value={search} onChange={setSearch} />
+          <label className="text-sm text-slate-300">
+            Competition
+            <select
+              className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-white"
+              value={competitionId}
+              onChange={(event) => setCompetitionId(event.target.value)}
+            >
+              <option value="">All competitions</option>
+              {competitions.map((competition) => (
+                <option key={competition.id} value={competition.id}>
+                  {competition.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <SelectInput
+            label="Status"
+            value={status}
+            onChange={setStatus}
+            options={[
+              'active',
+              'scheduled',
+              'live',
+              'finished',
+              'cancelled',
+              'all',
+            ]}
+          />
+          <SelectInput
+            label="Visibility"
+            value={archiveFilter}
+            onChange={setArchiveFilter}
+            options={['visible', 'archived', 'all']}
+          />
+          <label className="text-sm text-slate-300">
+            Limit
+            <select
+              className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-white"
+              value={limit}
+              onChange={(event) => setLimit(Number(event.target.value))}
+            >
+              {[100, 300, 500, 1000].map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={filterButtonClass(
+              dateScope === 'date' && date === todayDateKey(),
+            )}
+            onClick={() => {
+              setDate(todayDateKey());
+              setDateScope('date');
+            }}
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            className={filterButtonClass(
+              dateScope === 'date' && date === addDaysDateKey(1),
+            )}
+            onClick={() => {
+              setDate(addDaysDateKey(1));
+              setDateScope('date');
+            }}
+          >
+            Tomorrow
+          </button>
+          <button
+            type="button"
+            className={filterButtonClass(dateScope === 'week')}
+            onClick={() => {
+              setDate(todayDateKey());
+              setDateScope('week');
+            }}
+          >
+            This week
+          </button>
+          <button
+            type="button"
+            className={filterButtonClass(dateScope === 'all')}
+            onClick={() => {
+              setDate('');
+              setDateScope('all');
+            }}
+          >
+            All dates
+          </button>
+        </div>
+
+        {fixtureDayOptions.length > 0 && (
+          <div className="grid gap-2 rounded border border-white/10 bg-black/20 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm font-semibold">Fixture days</p>
+              <span className="text-xs text-slate-500">
+                Dates with saved fixtures under the current filters
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {fixtureDayOptions.map((day) => (
+                <button
+                  key={day.dateKey}
+                  type="button"
+                  className={filterButtonClass(
+                    dateScope === 'date' && date === day.dateKey,
+                  )}
+                  onClick={() => {
+                    setDate(day.dateKey === 'No date' ? '' : day.dateKey);
+                    setDateScope(day.dateKey === 'No date' ? 'all' : 'date');
+                  }}
+                >
+                  {fixtureDateLabel(day.dateKey)} · {day.count}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-slate-400">
+          <span>
+            Showing {filteredFixtures.length} of {fixtures.length} loaded
+            fixtures
+          </span>
+          {action && <span aria-live="polite">{action}...</span>}
+          {message && (
+            <span className="text-studio-lime" aria-live="polite">
+              {message}
+            </span>
+          )}
+        </div>
+
+        {loading && (
+          <p className="text-sm text-slate-400">Loading fixtures...</p>
+        )}
+        {!loading && groupedFixtures.length === 0 && (
+          <EmptyState
+            title="No fixtures found"
+            body="Try another date, status or competition filter, or refresh GOAL API fixtures for the selected date."
+          />
+        )}
+
+        <div className="grid gap-4">
+          {groupedFixtures.map((group) => (
+            <section
+              key={group.key}
+              className="grid gap-2 rounded border border-white/10 bg-black/20 p-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2">
+                <div>
+                  <p className="text-sm font-semibold text-studio-lime">
+                    {group.dateLabel}
+                  </p>
+                  <h4 className="font-semibold">{group.competitionLabel}</h4>
+                </div>
+                <span className="text-xs text-slate-500">
+                  {group.items.length} fixtures
+                </span>
+              </div>
+
+              <div className="grid gap-2">
+                {group.items.map((item) => (
+                  <article
+                    key={item.fixture.id}
+                    className="grid gap-3 rounded border border-white/10 bg-studio-panel p-3 lg:grid-cols-[80px_minmax(0,1fr)_120px_110px_auto]"
+                  >
+                    <div className="text-sm text-slate-400">
+                      {fixtureTimeLabel(item.fixture.kickoffAt)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold">
+                        {item.homeTeam.name} vs {item.awayTeam.name}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {item.fixture.sourceType ?? 'LOCAL'} | {item.fixture.id}
+                      </p>
+                    </div>
+                    <div className="text-sm">
+                      <StatusBadge status={item.fixture.status} />
+                      {item.fixture.archivedAt && (
+                        <p className="mt-1 text-xs text-amber-200">Hidden</p>
+                      )}
+                    </div>
+                    <div className="font-semibold">
+                      {fixtureScoreLabel(item)}
+                    </div>
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                      {item.fixture.sourceType === 'SYNCED' && (
+                        <button
+                          type="button"
+                          className="rounded border border-white/10 px-3 py-2 text-sm font-semibold"
+                          disabled={action !== null}
+                          onClick={() =>
+                            void runAction(
+                              'Refresh provider result',
+                              async () => {
+                                const result = await request<SyncResult>(
+                                  `/api/sync/fixtures/${item.fixture.id}/result`,
+                                  { method: 'POST' },
+                                );
+                                return (reloadedFixtures) => {
+                                  const latestFixture = reloadedFixtures.find(
+                                    (fixtureItem) =>
+                                      fixtureItem.fixture.id ===
+                                      item.fixture.id,
+                                  );
+                                  const latestStatus =
+                                    latestFixture?.fixture.status ??
+                                    item.fixture.status;
+                                  const hiddenByCurrentStatus =
+                                    status !== 'all' &&
+                                    !fixtureMatchesStatusFilter(
+                                      {
+                                        ...item,
+                                        fixture: {
+                                          ...item.fixture,
+                                          status: latestStatus,
+                                        },
+                                      },
+                                      status,
+                                    );
+                                  setMessage(
+                                    [
+                                      `${item.homeTeam.name} vs ${item.awayTeam.name}: ${result.updated} updated, ${result.unresolved} unresolved, ${result.failed} failed. Status ${latestStatus}.`,
+                                      hiddenByCurrentStatus
+                                        ? `It is hidden by the current ${status} status filter; switch to all to see it.`
+                                        : '',
+                                    ]
+                                      .filter(Boolean)
+                                      .join(' '),
+                                  );
+                                };
+                              },
+                            )
+                          }
+                        >
+                          Refresh result
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="rounded border border-white/10 px-3 py-2 text-sm font-semibold"
+                        disabled={action !== null}
+                        onClick={() =>
+                          void runAction(
+                            item.fixture.archivedAt
+                              ? 'Restore fixture'
+                              : 'Hide fixture',
+                            async () => {
+                              const nextArchived = !item.fixture.archivedAt;
+                              await request(
+                                `/api/fixtures/${item.fixture.id}/archive`,
+                                {
+                                  method: 'PATCH',
+                                  body: JSON.stringify({
+                                    archived: nextArchived,
+                                  }),
+                                },
+                              );
+                              setMessage(
+                                `${item.homeTeam.name} vs ${item.awayTeam.name} ${nextArchived ? 'hidden' : 'restored'}.`,
+                              );
+                            },
+                          )
+                        }
+                      >
+                        {item.fixture.archivedAt ? 'Restore' : 'Hide'}
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      </section>
     </CatalogSection>
   );
+}
+
+function fixtureMatchesStatusFilter(
+  item: FixtureOption,
+  filter: string,
+): boolean {
+  const status = item.fixture.status;
+  if (filter === 'all') return true;
+  if (filter === 'active')
+    return ['SCHEDULED', 'LIVE', 'POSTPONED', 'UNKNOWN'].includes(status);
+  if (filter === 'scheduled') return status === 'SCHEDULED';
+  if (filter === 'live') return status === 'LIVE';
+  if (filter === 'finished') return status === 'FINISHED';
+  if (filter === 'cancelled')
+    return ['CANCELLED', 'ABANDONED', 'POSTPONED'].includes(status);
+  return true;
+}
+
+function filterButtonClass(active: boolean): string {
+  return [
+    'rounded border px-3 py-2 text-sm font-semibold transition',
+    active
+      ? 'border-studio-lime bg-studio-lime text-black'
+      : 'border-white/10 bg-black/20 text-slate-300 hover:border-white/30',
+  ].join(' ');
+}
+
+function groupFixtureManagementItems(items: FixtureOption[]): Array<{
+  key: string;
+  dateLabel: string;
+  competitionLabel: string;
+  items: FixtureOption[];
+}> {
+  const groups = new Map<string, FixtureOption[]>();
+  for (const item of items) {
+    const key = `${fixtureDateKey(item.fixture.kickoffAt)}|${item.competition?.name ?? 'No competition'}`;
+    groups.set(key, [...(groups.get(key) ?? []), item]);
+  }
+
+  return [...groups.entries()]
+    .sort(([left], [right]) => right.localeCompare(left))
+    .map(([key, groupItems]) => {
+      const [dateKey, competitionLabel] = key.split('|');
+      return {
+        key,
+        dateLabel: fixtureDateLabel(dateKey),
+        competitionLabel: competitionLabel || 'No competition',
+        items: [...groupItems].sort((left, right) =>
+          (left.fixture.kickoffAt ?? '').localeCompare(
+            right.fixture.kickoffAt ?? '',
+          ),
+        ),
+      };
+    });
+}
+
+function fixtureDateKey(value: string | null): string {
+  return value ? value.slice(0, 10) : 'No date';
+}
+
+function todayDateKey(): string {
+  return addDaysDateKey(0);
+}
+
+function addDaysDateKey(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function fixtureMatchesDateScope(
+  item: FixtureOption,
+  dateScope: string,
+  selectedDate: string,
+): boolean {
+  if (dateScope === 'all') return true;
+
+  const dateKey = fixtureDateKey(item.fixture.kickoffAt);
+  if (dateKey === 'No date') return false;
+
+  if (dateScope === 'week') {
+    return dateKey >= todayDateKey() && dateKey <= addDaysDateKey(6);
+  }
+
+  return !selectedDate || dateKey === selectedDate;
+}
+
+function summarizeFixtureDays(
+  items: FixtureOption[],
+): Array<{ dateKey: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    const dateKey = fixtureDateKey(item.fixture.kickoffAt);
+    counts.set(dateKey, (counts.get(dateKey) ?? 0) + 1);
+  }
+
+  return [...counts.entries()]
+    .sort(([left], [right]) => right.localeCompare(left))
+    .slice(0, 24)
+    .map(([dateKey, count]) => ({ dateKey, count }));
+}
+
+function fixtureDateLabel(value: string): string {
+  if (value === 'No date') return value;
+  return formatFixtureDateTime(`${value}T00:00:00.000Z`).split(',')[0] ?? value;
+}
+
+function fixtureTimeLabel(value: string | null): string {
+  if (!value) return 'No time';
+  return new Date(value).toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function fixtureScoreLabel(item: FixtureOption): string {
+  const { homeScore, awayScore } = item.fixture;
+  if (homeScore === null || awayScore === null) return '-';
+  return `${homeScore}-${awayScore}`;
 }
 
 function SettlementPanel() {
@@ -4202,6 +4804,7 @@ function TextInput(props: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  type?: string;
   required?: boolean;
 }) {
   return (
@@ -4209,6 +4812,7 @@ function TextInput(props: {
       {props.label}
       <input
         required={props.required}
+        type={props.type}
         className="mt-1 w-full rounded border border-white/10 bg-black/30 px-3 py-2 text-white"
         value={props.value}
         onChange={(event) => props.onChange(event.target.value)}

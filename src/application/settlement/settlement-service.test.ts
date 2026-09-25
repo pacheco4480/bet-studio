@@ -243,6 +243,7 @@ function seedScenario(
     awayScore: options.fixtureScore[1],
     liveMinute: null,
     sourceType: options.sourceType ?? 'MANUAL',
+    archivedAt: null,
     createdAt: now,
     updatedAt: now,
   };

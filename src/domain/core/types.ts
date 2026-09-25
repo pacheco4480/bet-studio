@@ -124,6 +124,7 @@ export type Fixture = {
   awayScore: number | null;
   liveMinute: number | null;
   sourceType: FixtureSourceType;
+  archivedAt: UtcDateString | null;
   createdAt: UtcDateString;
   updatedAt: UtcDateString;
 };

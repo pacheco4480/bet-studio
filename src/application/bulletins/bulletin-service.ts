@@ -81,6 +81,7 @@ export type BulletinRepository = {
     search?: string;
     limit: number;
     upcomingOnly?: boolean;
+    includeArchived?: boolean;
   }): FixtureOption[];
   listMarkets(input: {
     search?: string;
@@ -179,12 +180,14 @@ export class BulletinService {
     search?: string;
     limit?: number;
     upcomingOnly?: boolean;
+    includeArchived?: boolean;
   }) {
     return {
       items: this.repository.listFixtures({
         search: query.search,
         limit: query.limit ?? 50,
         upcomingOnly: query.upcomingOnly ?? true,
+        includeArchived: query.includeArchived ?? false,
       }),
     };
   }
@@ -220,6 +223,7 @@ export class BulletinService {
       awayScore: null,
       liveMinute: null,
       sourceType: 'MANUAL',
+      archivedAt: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -227,6 +231,20 @@ export class BulletinService {
     const context = this.repository.getFixtureContext(fixture.id);
     if (!context) throw new NotFoundError('Fixture not found');
     return context;
+  }
+
+  setFixtureArchived(id: string, archived: boolean): FixtureOption {
+    const context = this.repository.getFixtureContext(id as FixtureId);
+    if (!context) throw new NotFoundError('Fixture not found');
+    const now = nowUtc();
+    this.repository.saveFixture({
+      ...context.fixture,
+      archivedAt: archived ? now : null,
+      updatedAt: now,
+    });
+    const updated = this.repository.getFixtureContext(id as FixtureId);
+    if (!updated) throw new NotFoundError('Fixture not found');
+    return updated;
   }
 
   createBulletin(input: unknown): BulletinAggregateDto {

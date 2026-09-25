@@ -4,6 +4,12 @@ Bet Studio is a local-first application for creating, managing, evaluating and r
 
 It combines structured football data, deterministic market settlement, versioned rendering and local SQLite persistence. External football data can be synchronized when configured, but the core workflow remains usable manually without API credentials.
 
+## Portfolio Use And Rights
+
+This repository is public for portfolio review purposes only.
+
+All rights reserved. Reuse, redistribution or commercial use of this project, its source code, product concept, assets or implementation details is not permitted without written permission.
+
 ## Features
 
 - Competition, team, fixture and market management.

@@ -398,6 +398,7 @@ export class SynchronizationService {
               awayScore: item.awayScore,
               liveMinute: null,
               sourceType: 'SYNCED',
+              archivedAt: null,
               createdAt: now,
               updatedAt: now,
             };

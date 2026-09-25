@@ -287,6 +287,8 @@ type Fixture = {
     | 'MANUAL'
     | 'SYNCED';
 
+  archivedAt: Date | null;
+
   createdAt: Date;
   updatedAt: Date;
 };
@@ -309,6 +311,7 @@ Result data must never be invented.
 Manual fixtures must be fully supported.
 A synchronized fixture may be manually corrected.
 Historical bulletin data must not depend exclusively on current fixture values.
+Archived fixtures are hidden from ordinary fixture pickers and management views by default, but must remain available to historical bulletins.
 12. Fixture Result Details
 
 Some betting markets require information beyond the final score.
