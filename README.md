@@ -1,29 +1,95 @@
 # Bet Studio
 
-Bet Studio is a local-first application for creating, managing, evaluating and rendering professional football betting bulletins for social media.
+Local-first platform for creating, evaluating and rendering professional
+football betting bulletins.
 
-It combines structured football data, deterministic market settlement, versioned rendering and local SQLite persistence. External football data can be synchronized when configured, but the core workflow remains usable manually without API credentials.
+`TypeScript` · `React` · `Fastify` · `SQLite` · `Drizzle` · `Vitest` ·
+`Playwright` · `Tailwind CSS` · `GitHub Actions`
 
-## Portfolio Use And Rights
+> Portfolio notice: this repository is public for review and recruitment
+> purposes only. It is not open source. See [LICENSE.md](LICENSE.md).
 
-This repository is public for portfolio review purposes only.
+Bet Studio combines a structured bulletin builder, football data
+synchronization, deterministic market evaluation, renderable template variants,
+local SQLite persistence and a history workflow for results and settlement.
 
-All rights reserved. Reuse, redistribution or commercial use of this project, its source code, product concept, assets or implementation details is not permitted without written permission.
+## Demo Preview
 
-## Features
+Screenshots below use local demo data.
 
-- Competition, team, fixture and market management.
-- Optional GOAL API synchronization for selected football data.
-- Bulletin Builder for `SINGLE` and `MULTI` bulletins.
-- `PRE_MATCH` and `LIVE` bulletin modes.
-- Up to 10 selections per bulletin.
-- Fixture dropdown focused on upcoming/live fixtures, with an option to show older or finished fixtures.
+![Bet Studio dashboard](docs/media/bet-studio-dashboard.png)
+
+### Builder And Export
+
+![Bet Studio builder](docs/media/bet-studio-builder.png)
+
+![Bet Studio exported bulletin](docs/media/bet-studio-export.png)
+
+### History, Fixtures And Analytics
+
+![Bet Studio history](docs/media/bet-studio-history-detail.png)
+
+![Bet Studio fixtures](docs/media/bet-studio-fixtures.png)
+
+![Bet Studio analytics](docs/media/bet-studio-analytics.png)
+
+## Product Workflow
+
+```text
+Catalog data
+  -> Fixtures
+  -> Bulletin Builder
+  -> PNG Rendering
+  -> History
+  -> Result refresh / Manual settlement
+  -> Analytics
+```
+
+Core workflows remain usable offline and manually. External football providers
+are optional helpers for competitions, teams, fixtures, results and artwork.
+
+## Highlights
+
+- Local-first product with SQLite persistence and no required cloud services.
+- `SINGLE` and `MULTI` bulletin builder with up to 10 selections.
+- Manual fixtures plus optional provider-synced fixtures.
+- Saved fixture management with date filters, competition/status filters,
+  archive/restore actions and bulk refresh for visible synced results.
 - Deterministic market settlement for supported market families.
-- Manual result entry and manual settlement overrides.
-- History view with result management, audit timeline, duplicate/edit actions and render history.
+- Manual result entry and manual settlement overrides when provider data is
+  incomplete or unsafe to evaluate automatically.
+- History view with saved bulletins, selection results, render records and
+  audit-style settlement events.
 - Deterministic FEED PNG export at `1080 x 1350`.
-- Saved FEED theme variants and optional team-logo/initial display.
-- Historical snapshots so saved bulletins and renders do not silently change when catalog data changes later.
+- Multiple FEED themes, configurable footer text and optional team initials or
+  official cached team logos.
+- Historical snapshots so saved bulletins and renders do not silently change
+  when current catalog data changes later.
+- Analytics for bulletin outcomes, selection breakdowns, settled stake,
+  realized return, realized profit, top markets and top competitions.
+
+## Engineering Highlights
+
+- Layered architecture with clear dependency direction:
+
+```text
+Presentation
+    ↓
+Application
+    ↓
+Domain
+    ↑
+Infrastructure
+```
+
+- Domain rules are framework-independent.
+- Provider responses are normalized and treated as untrusted input.
+- External API credentials stay server-side.
+- Rendering is deterministic and based on structured data, not generated images.
+- Market settlement uses market codes and validated parameters, never natural
+  language guessing.
+- Automated tests avoid live football API calls.
+- CI runs formatting, linting, typechecking, tests and production build.
 
 ## Tech Stack
 
@@ -42,32 +108,13 @@ All rights reserved. Reuse, redistribution or commercial use of this project, it
 - Prettier
 - GitHub Actions
 
-## Architecture
-
-Bet Studio follows a small layered architecture:
-
-```text
-Presentation
-    ↓
-Application
-    ↓
-Domain
-    ↑
-Infrastructure
-```
-
-The Domain layer contains framework-independent rules such as settlement behavior and bulletin invariants. Application services coordinate use cases. Infrastructure owns SQLite, Drizzle, provider adapters and rendering adapters. Presentation contains the Fastify API and React UI.
-
-See [docs/architecture.md](docs/architecture.md) for the full architecture notes.
-
 ## Getting Started
 
 ### Requirements
 
 - Node.js `>=22 <23`
 - npm
-
-Playwright Chromium is required for PNG rendering and for optional E2E tests.
+- Playwright Chromium for PNG rendering and optional E2E tests
 
 ### Install
 
@@ -107,14 +154,8 @@ API_FOOTBALL_REQUEST_INTERVAL_MS=6500
 API_FOOTBALL_SEASON=2024
 ```
 
-`GOAL_API_KEY` is optional. If it is empty, local workflows still work and provider sync actions fail gracefully.
-
-`API_FOOTBALL_API_KEY` is optional and is used only to download official team
-logos. Logos are cached locally and rendering remains available offline. Set
-`API_FOOTBALL_SEASON` defaults to 2024 because the free API-Football plan limits
-season access. Missing current teams are resolved through the team search
-endpoint and cached locally. The request interval respects the free plan's
-per-minute limit.
+Provider keys are optional. If they are empty, local workflows still work and
+provider sync actions fail gracefully.
 
 Never commit `.env` or real API keys.
 
@@ -134,21 +175,28 @@ The default local database path is `./data/bet-studio.db`.
 npm run dev
 ```
 
-The API runs on `127.0.0.1:3000` by default and the Vite web app runs on the port selected by Vite, normally `5173`.
+The API runs on `127.0.0.1:3000` by default. The Vite web app runs on the port
+selected by Vite, normally `5173`.
 
-## Football Data Provider
+## Football Data Providers
 
-GOAL API integration is optional and server-side only. The provider can refresh configured competitions, teams, fixtures and fixture results, but provider responses are treated as untrusted input and normalized before persistence.
+GOAL API integration is optional and server-side only. It can refresh selected
+competitions, teams, fixtures and fixture results. Responses are validated and
+normalized before persistence.
 
-The current GOAL API adapter does not enable corners as a trusted capability. Corner markets can still be evaluated after corner totals are entered manually in History. Team logos can be cached locally from safe provider raster URLs when available, and rendered bulletins fall back to deterministic initials whenever an official logo is missing.
+API-Football integration is optional and used for official team artwork. Logos
+are cached locally and rendering falls back to deterministic initials whenever
+an official logo is missing.
 
-Bet Studio does not require provider access for local competitions, teams, fixtures, bulletins, settlement, history or rendering.
+Bet Studio does not require provider access for local competitions, teams,
+fixtures, bulletins, settlement, history, analytics or rendering.
 
-See [docs/api-integration.md](docs/api-integration.md) for provider behavior and failure rules.
+See [docs/api-integration.md](docs/api-integration.md).
 
 ## Market Engine
 
-Automatic settlement is deterministic and based on market codes plus validated parameters, never on natural-language market names.
+Automatic settlement is deterministic and based on market codes plus validated
+parameters.
 
 Implemented evaluator families:
 
@@ -159,7 +207,7 @@ Implemented evaluator families:
 - `TOTAL_CORNERS`
 - `COMPOSITE`
 
-Unsupported or unsafe automatic settlement resolves to `MANUAL` instead of guessing.
+Unsupported or unsafe automatic settlement resolves to `MANUAL`.
 
 See [docs/market-engine.md](docs/market-engine.md).
 
@@ -173,25 +221,15 @@ FEED
 PNG
 ```
 
-Rendering uses structured saved bulletin data, frozen snapshots, versioned templates and local assets. Playwright Chromium is used to render and export the final PNG. Historical render records are kept separately, so a new export does not overwrite old render metadata.
+Rendering uses structured saved bulletin data, frozen snapshots, versioned
+templates and local assets. Playwright Chromium renders the final PNG.
 
-The Builder currently exposes six deterministic FEED themes: `LIME`, `ELECTRIC`, `MONO`, `CHAMPIONS`, `EUROPA` and `CONFERENCE`. Team logo display can be toggled per bulletin and set to initials or official cached logos with initials fallback. Footer text is configurable per bulletin for channels, social links or service branding.
-
-Story `1080 x 1920` rendering is future scope.
+The Builder exposes deterministic FEED themes: `LIME`, `ELECTRIC`, `MONO`,
+`CHAMPIONS`, `EUROPA` and `CONFERENCE`. Team identity can render as initials or
+official cached logos with initials fallback. Footer text is configurable per
+bulletin for channels, social links or service branding.
 
 See [docs/rendering-engine.md](docs/rendering-engine.md).
-
-## Analytics
-
-The Analytics tab summarizes saved local data:
-
-- Bulletin and selection totals.
-- GREEN/RED/PENDING/VOID/MANUAL breakdowns.
-- Bulletin and selection win rates.
-- Settled stake, realized return and realized profit for GREEN/RED/VOID bulletins with valid stake.
-- Top markets and competitions by saved selections.
-
-Pending and manual bulletins are excluded from realized financial performance.
 
 ## Testing
 
@@ -217,40 +255,17 @@ Optional E2E tests:
 npm run test:e2e
 ```
 
-Ordinary automated tests do not call the real football provider.
+Ordinary automated tests do not call real football APIs.
 
 ## Project Structure
 
 ```text
-docs/        Product, architecture, data, market, provider and rendering docs
-drizzle/     Database migrations
-prompts/     Implementation phase prompts
-src/domain   Framework-independent domain rules
-src/application
-             Use cases and service coordination
-src/infrastructure
-             Database, repositories, providers and rendering adapters
-src/presentation
-             Fastify API and React web app
-```
-
-## CI
-
-GitHub Actions uses `npm ci` and runs formatting, linting, typechecking, tests and build. CI does not require GOAL API credentials.
-
-## Security And Data
-
-Bet Studio is local-first. Application data is stored locally, API credentials stay server-side, `.env` is ignored by git and generated exports/database files are not committed by default.
-
-API errors use a stable envelope:
-
-```json
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Human-readable message"
-  }
-}
+docs/                 Product, architecture, data, market, provider and rendering docs
+drizzle/              Database migrations
+src/domain            Framework-independent domain rules
+src/application       Use cases and service coordination
+src/infrastructure    Database, repositories, providers, assets and rendering adapters
+src/presentation      Fastify API and React web app
 ```
 
 ## Documentation
@@ -263,6 +278,39 @@ API errors use a stable envelope:
 - [docs/api-integration.md](docs/api-integration.md)
 - [AGENTS.md](AGENTS.md)
 
+## Security And Data
+
+Bet Studio is local-first. Application data is stored locally, API credentials
+stay server-side, `.env` is ignored by git and generated exports/database files
+are not committed by default.
+
+API errors use a stable envelope:
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Human-readable message"
+  }
+}
+```
+
+## Development Note
+
+AI-assisted coding tools were used during development for implementation
+support, refactoring and documentation review. Product direction, architecture
+decisions, validation and final code ownership remain with the author.
+
+## Trademarks And Third-Party Assets
+
+Team names, competition names, logos and related marks may belong to their
+respective owners. Bet Studio does not claim ownership of third-party trademarks
+or provider-supplied artwork.
+
+Official team logos are treated as optional locally cached visual references for
+development and demo workflows. They should be cleared, replaced or separately
+licensed before any commercial, public production or client use.
+
 ## Future Scope
 
 - Story `1080 x 1920` rendering.
@@ -273,8 +321,15 @@ API errors use a stable envelope:
 
 ## License
 
-No license has been declared yet.
+This project is proprietary and published for portfolio review only.
+
+Copyright (c) 2026 David. All rights reserved.
+
+No permission is granted to copy, modify, redistribute, sublicense, sell, host,
+deploy or use this software for personal, commercial or production purposes
+without prior written permission. See [LICENSE.md](LICENSE.md).
 
 ## Disclaimer
 
-Bet Studio is a content and workflow tool. It does not provide betting advice, predictions or guaranteed outcomes.
+Bet Studio is a content and workflow tool. It does not provide betting advice,
+predictions or guaranteed outcomes.
